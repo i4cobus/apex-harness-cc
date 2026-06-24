@@ -1,0 +1,27 @@
+{
+  "_comment": "APEX guardrails for Claude Code. Merge the `hooks` block into your settings.json (~/.claude/settings.json for global, or <repo>/.claude/settings.json for project). Replace APEX_HOME with the absolute path to the apex-cc-harness folder. The completion-gate Stop hook is opt-in — drop that block if you don't want it.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "APEX_HOME/hooks/env-guard.sh" }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "APEX_HOME/hooks/load-kernel.sh" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "APEX_HOME/hooks/completion-gate.sh" }
+        ]
+      }
+    ]
+  }
+}
