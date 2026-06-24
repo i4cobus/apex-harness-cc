@@ -1,0 +1,37 @@
+# WANT<TAB>COMMAND   (B=must block exit2, A=must allow exit0)
+B	echo -n x && pip install requests
+B	uv run true && pip install requests
+B	grep -n foo file.txt; pip install evil
+B	cd /tmp && pip install evil
+B	(pip install evil)
+B	echo $(pip install evil)
+A	echo "how to pip install packages"
+A	git commit -m "docs: explain pip install workflow"
+A	grep "pip install" README.md
+A	cat notes.txt | grep 'conda install'
+B	pip install requests
+B	pip3 install requests
+B	pip uninstall requests
+B	python -m pip install requests
+B	conda install numpy
+B	mamba install numpy
+B	uv pip install requests
+B	sudo pip install requests
+B	conda install -n base numpy
+B	conda run -n base pip install evil
+B	/usr/bin/python -m pip install x
+B	pip install --break-system-packages x
+B	pip install --user requests
+A	python -m venv .venv && source .venv/bin/activate && pip install requests
+A	conda create -n proj python=3.11 && conda run -n proj pip install x
+A	uv venv && uv pip install requests
+A	pip install --target ./.deps requests
+A	.venv/bin/pip install requests
+A	uv add requests
+A	poetry add requests
+A	poetry install
+A	conda install -n proj numpy
+A	VIRTUAL_ENV=.venv pip install requests
+A	ls -la
+A	uv run pytest
+A	python script.py

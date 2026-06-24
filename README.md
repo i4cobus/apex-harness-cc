@@ -145,7 +145,12 @@ arrive via skill invocation instead.
 ## Status / what's been verified
 
 Validated live on macOS (Claude Code, `jq` present, Python 3.11):
-- `env-guard` blocks bare `pip/conda/uv pip` installs and allows venv / `uv add` / non-install commands.
+- `env-guard` parses each sub-command's leading program (not substring-scanning the whole
+  line), so it blocks bare `pip/conda/uv pip` installs **and** chain-bypasses like
+  `uv run x && pip install evil`, while allowing the documented safe workflows
+  (activate-then-install, `conda run -n proj …`, `uv venv && uv pip install`, `uv add`) and
+  commands that merely mention an install in a quoted string. Covered by a 36-case
+  regression suite (`hooks/test-env-guard.sh`) passing on bash 3.2 and 5.3.
 - `load-kernel` injects the kernel at session start.
 - `completion-gate` parses the real transcript format and triggers only on hedged-without-evidence endings.
 - The `apex` skill and `apex-verify` workflow load and route correctly.
