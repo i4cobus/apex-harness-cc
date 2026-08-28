@@ -8,6 +8,7 @@ told to follow can be skipped under load; a hook cannot.
 | `env-guard.sh` | PreToolUse(Bash) | §8 env hygiene | **Denies** `pip`/`conda` installs that target base/system/global Python with no explicit non-shared env. | Hard gate (exit 2). |
 | `fs-guard.sh` | PreToolUse(Bash, Write) | §8 recoverability | On `rm` / truncating `>` / `mv`·`cp` onto an existing file / `tee` / `git clean -f` / `Write`, **asks the user** when the target holds files git has never seen and does not ignore. | Soft gate (`permissionDecision: "ask"`). |
 | `load-kernel.sh` | SessionStart | §1–§8 (all) | Injects `KERNEL.md` into context every session so the rules are always present, not memory-dependent. Scope selectable (see below). | Always-on context. |
+| `record-nudge.sh` | SessionStart, UserPromptSubmit, PreCompact | §7 externalize state | When N files have changed and **nothing** has been written to `docs/`, injects one line asking for the findings. Re-arms by growth and after every compaction. | Soft, non-blocking (`additionalContext`). |
 | `completion-gate.sh` | Stop | §3 do not bluff | If the final turn claims success with hedge words but shows no verification/caveat, blocks **once** and asks for evidence. | Soft, opt-in, non-looping. |
 
 ## Why `fs-guard` asks instead of denying
@@ -48,6 +49,35 @@ oversight later: the hook gives up an explicit-target requirement in exchange fo
 a third-party tool's guarantee. If uv ever changes that default, this stops holding.
 The alternative was a false positive on every uv project, and guards that are wrong on
 ordinary commands get uninstalled.
+
+## Why `record-nudge` nudges on a growth curve
+
+The pain it addresses is having to remind the agent to write things down. The rule already
+existed (kernel §7); nothing was watching whether it was followed.
+
+Blocking was rejected for the reason recorded below: of a close-out checklist, only one item
+is decidable. But that one item — *nothing at all was written down* — is worth saying out
+loud, and `UserPromptSubmit` is the only event that can inject context and be trusted to
+(`PreCompact` can block but cannot speak, so it re-arms the next prompt instead).
+
+Frequency is the part that is easy to get wrong. Once per session is useless to anyone who
+runs long sessions through repeated compactions: the one reminder lands at the start, about
+nothing. So it re-arms on **growth** — another `nudge_after` files changed with still
+nothing recorded — and **immediately after a compaction**, which is the moment unwritten
+findings actually die. Writing anything to the knowledge layer resets it.
+
+The baseline is where the repo stood at session start, not `HEAD`, so committing the work
+does not clear the debt: a commit records what you did, not what you learned.
+
+Config, in the `.apex` marker file:
+
+```
+nudge_after = 5          # files changed before it speaks again (default 5)
+knowledge   = docs/      # what counts as having recorded something
+```
+
+`APEX_NUDGE=off` disables it; `APEX_NUDGE_AFTER` overrides the threshold from the
+environment.
 
 ## Sub-command splitting
 
@@ -91,7 +121,7 @@ rejected, so the next person does not re-litigate it.
 
 | Not done | Why |
 |---|---|
-| A **Stop hook for the documentation/close-out checklist** | Only one item ("no doc was touched at all") is decidable; the rest are semantic. Mis-firing on the undecidable ones would train the user to disable the whole set. |
+| A **Stop hook for the documentation/close-out checklist** | Only one item ("no doc was touched at all") is decidable; the rest are semantic. Mis-firing on the undecidable ones would train the user to disable the whole set. That one decidable item is now handled by `record-nudge`, which injects a line instead of blocking. |
 | Blocking **global `npm`/`cargo`/`gem` installs** | Unlike Python's base env, a global CLI install is routinely legitimate. The false-positive rate would exceed the harm prevented. |
 | `fs-guard` on the **Edit tool** | Edit is surgical and requires a prior Read. It would fire on every revision of a brand-new file — the exact nagging pattern that gets guards uninstalled. |
 | `fs-guard` for **`dd` / `truncate` / `shred` / `sed -i`** | Rare in agent work; each needs its own parser. Added only if one is actually observed. |
@@ -114,8 +144,8 @@ Honest framing: this is defense in depth, not a sandbox. `env-guard` is a real g
    `APEX_HOME` with the absolute path to the `apex-harness-cc` folder.
 3. Ensure the scripts are executable: `chmod +x apex-harness-cc/hooks/*.sh`.
 4. **Restart Claude Code** (or start a new session), then run `/hooks` to confirm
-   `PreToolUse·Bash`, `PreToolUse·Write`, `SessionStart`, and `Stop` are listed. Empty list
-   = not active.
+   `PreToolUse·Bash`, `PreToolUse·Write`, `SessionStart`, `UserPromptSubmit`, `PreCompact`
+   and `Stop` are listed. Empty list = not active.
 5. Requires `jq` on PATH (`fs-guard` also requires `git`). If either is absent the hooks
    fail open (allow) so they can never wedge your session.
 
@@ -133,6 +163,7 @@ spread was 1-6 ms, so treat smaller differences as noise.
 | Hook | Path | Latency |
 |---|---|---|
 | `env-guard` | any Bash call | **~17 ms** |
+| `record-nudge` | any user prompt (once per prompt, not per tool call) | **~48 ms** |
 | `fs-guard` | command cannot destroy anything (pre-filter exits before splitting or calling `git`) | **~19 ms** |
 | `fs-guard` | `Write` to an existing file | **~36 ms** |
 | `fs-guard` | destructive verb -> quote-aware split + one pathspec-limited `git status` per target | **~41 ms** |
@@ -150,6 +181,7 @@ wholly-untracked directory to one line instead of two thousand.
 hooks/test-env-guard.sh          # 46 cases — env-guard
 hooks/test-fs-guard.sh           # 50 cases + ledger + ownership — fs-guard (builds a throwaway git repo)
 hooks/test-completion-gate.sh    # 13 cases — completion-gate (synthetic transcripts)
+hooks/test-record-nudge.sh       # 19 cases — record-nudge (a session walked through a repo)
 ```
 
 Each runs the matrix under both `/bin/bash` (3.2, macOS system) and a modern bash.

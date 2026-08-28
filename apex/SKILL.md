@@ -36,7 +36,7 @@ by hooks (see `../hooks/`); the rest you execute through these native moves:
 | Adversarial verification (added) | For high-blast claims, fan out independent skeptics via the `apex-verify` workflow or the Agent tool — see `references/verification.md`. |
 | Don't bluff / completion gate | Honor the completion rules in `references/workflow.md`; the `completion-gate` Stop hook reminds you before finishing. |
 | Hold scope; surface tradeoffs | Use AskUserQuestion only at the consultation boundary (`references/workflow.md` §3). Record approved deviations via `references/tradeoff_template.md`. |
-| Externalize state | Maintain `docs/` artifacts per `references/documentation_topology.md`; coverage in `docs/matrix_*.md`; handoff only when asked. |
+| Externalize state | Write findings to `docs/` **when you find them**, not at the end; coverage in `docs/matrix_*.md`; handoff only when asked. The `record-nudge` hook says so when a stretch of work has produced no record. Never the agent's own memory store — `references/documentation_topology.md` §6. |
 | Keep workspace clean (env hygiene) | Enforced by the `env-guard` PreToolUse hook — deps cannot be installed into base/system/global Python. |
 | Keep workspace recoverable | Enforced by the `fs-guard` PreToolUse hook — destroying a path git has never seen becomes a user decision, not a silent loss. |
 | Scale beyond one context | Decompose with the Agent/Workflow tools per `references/orchestration.md`. |
@@ -75,6 +75,8 @@ ceremony):
 - "The shape / schema / config probably is…" without reading the source of truth.
 - "Docs can be updated later" after a source-of-truth doc went stale or wrong.
 - "Small enough to skip classification."
+- "I'll write this up at the end" — the end is when there is least context left to
+  write it from.
 - "The number went up" with no noise floor, no stated conditions, and no provenance.
 - "This is probably a temp file / something I generated" before deleting or overwriting it.
 - Copying a personal note into a shared doc unchanged — the reader changed with it.

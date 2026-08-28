@@ -71,9 +71,15 @@ If none apply, pick the most defensible option and continue autonomously.
 
 ## 7. Externalize state for anything long-lived
 
-Working memory is lossy and context is finite. For substantial or multi-session work,
-write decisions and status to durable files, not just into the conversation:
+Working memory is lossy and context is finite. Anything held only in the conversation is
+already lost — compaction and session end arrive without warning. **Write a finding down
+when you find it, not when you finish.** The end of a task is the point of least remaining
+context and attention, which is precisely why it is the step that gets skipped.
 
+For substantial or multi-session work, write to durable files:
+
+- **findings** — what was learned, and above all what was *falsified* and must not be
+  retried; each figure with the command, date, and sample size behind it;
 - a **coverage map** (requirement → status → implementation pointer → verification
   pointer) as the requirement-level source of truth;
 - a **tradeoff log** with stable IDs for approved/unavoidable deviations, referenced by

@@ -18,7 +18,8 @@ port keeps the good parts and addresses both gaps:
    primitives: plan mode, the `verify` / `code-review` skills, the Agent / Workflow tools.
 3. **Guardrails** (`hooks/`) — rules that reduce to a deterministic check become hooks, not
    admonitions: a hard env-hygiene gate, a recoverability gate on destructive filesystem
-   operations, always-load-the-kernel, and a conservative anti-bluff completion check.
+   operations, always-load-the-kernel, a nudge when a stretch of work has produced no
+   written record, and a conservative anti-bluff completion check.
 4. **Added dimensions** — `references/verification.md` (adversarial verification),
    `references/orchestration.md` (context budget & fan-out), and
    `references/empirical_claims.md` (how a measurement earns the right to be called a
@@ -56,6 +57,7 @@ apex-harness-cc/
 │   ├── env-guard.sh               # PreToolUse(Bash): hard deny deps into base/system py
 │   ├── fs-guard.sh                # PreToolUse(Bash|Write): ask before destroying untracked files
 │   ├── split-subcommands.awk      # quote-aware sub-command splitting, shared by both guards
+│   ├── record-nudge.sh            # SessionStart|UserPromptSubmit|PreCompact: ask for the write-up
 │   ├── load-kernel.sh             # SessionStart: inject the kernel
 │   ├── completion-gate.sh         # Stop: conservative anti-bluff check (opt-in)
 │   ├── settings.snippet.json      # hook wiring to merge into settings.json
@@ -119,6 +121,7 @@ Workflow apex-verify  args={ "claim": "...", "evidence": ["path:line", "test cmd
 | Env hygiene (no deps into base/system) | **Mechanized**: `hooks/env-guard.sh` (hard deny). |
 | Don't fake completeness | Kernel §3 + **`hooks/completion-gate.sh`**. |
 | — (missing in original) Recoverability before destroying | **Added**: kernel §8 + **`hooks/fs-guard.sh`** (asks, doesn't deny). |
+| Externalize state (rule existed, nothing watched it) | **Mechanized**: `hooks/record-nudge.sh` — kernel §7 now has an observer, and recording moved from the last step to the moment of discovery. |
 | — (missing in original) Beyond one context | **Added**: `references/orchestration.md`. |
 | — (missing in original) Adversarial checking | **Added**: `references/verification.md` + `workflows/apex-verify.js`. |
 | — (missing in original) Defensible measured claims | **Added**: `references/empirical_claims.md`. |
@@ -139,12 +142,12 @@ The harness is designed to be proportionate, but it is not free.
 
 | What | When | Size |
 |---|---|---|
-| `KERNEL.md` | every session, via the `SessionStart` hook | **~1.2k tokens** |
+| `KERNEL.md` | every session, via the `SessionStart` hook | **~1.3k tokens** |
 | `SKILL.md` | only when the `apex` skill is invoked | ~1.6k tokens |
-| `references/workflow.md` | routed to on demand | ~2.3k |
-| `references/documentation_topology.md` | routed to on demand | ~2.1k |
+| `references/workflow.md` | routed to on demand | ~2.5k |
+| `references/documentation_topology.md` | routed to on demand | ~2.5k |
 | `references/empirical_claims.md` | routed to on demand | ~1.8k |
-| `references/orchestration.md` | routed to on demand | ~1.2k |
+| `references/orchestration.md` | routed to on demand | ~0.9k |
 | `references/verification.md` | routed to on demand | ~1.1k |
 | `references/*_template.md` | routed to on demand | 0.2–0.4k each |
 
@@ -152,13 +155,14 @@ The kernel is the only unconditional cost, and it rides in early context so prom
 amortizes the per-turn price. If you do not want it in unrelated projects, set
 `APEX_SCOPE=marker` (see `hooks/README.md`) and let it arrive via skill invocation instead.
 
-**Hooks** — zero tokens on the happy path; they emit ~120–200 tokens only when they fire.
+**Hooks** — zero tokens on the happy path; they emit ~85–200 tokens only when they fire.
 Latency per tool call, measured on macOS (Apple silicon, warm), median of 5 rounds x 30
 invocations; round-to-round spread was 1-6 ms:
 
 | Hook | Path | Latency |
 |---|---|---|
 | `env-guard` | any Bash call | ~17 ms |
+| `record-nudge` | any user prompt (once per prompt, not per tool call) | ~48 ms |
 | `fs-guard` | nothing destructive in the command (pre-filter, no `git` call) | ~19 ms |
 | `fs-guard` | destructive verb, or `Write` to an existing file → one `git status` per target | ~36–41 ms |
 | `fs-guard` | worst case: `rm -rf` a tracked directory holding thousands of untracked files | ~490 ms |
@@ -201,6 +205,10 @@ Python 3.11). Regression suites: **109 cases**, every matrix run under both inte
   `testimonial` counting as a `test`; a subagent reply counting as this turn's).
 - `load-kernel` injects the kernel at session start; `APEX_SCOPE=marker` correctly stays
   silent outside marked trees and fires inside them.
+- `record-nudge` speaks only when work has changed files and nothing has reached `docs/`,
+  re-arms on growth and after a compaction, goes quiet the moment something is recorded, and
+  is not satisfied by a commit (its baseline is session start, not `HEAD`). 21 cases,
+  `hooks/test-record-nudge.sh`, which walks a whole session through a throwaway repo.
 - **Fail-open paths tested**: with `jq` removed from `PATH`, all three hooks exit 0 silently
   on input that otherwise blocks; `fs-guard` also allows when `git` is absent.
 - **End-to-end in a live session**: with the hooks wired into `~/.claude/settings.json`,
@@ -226,6 +234,9 @@ Python 3.11). Regression suites: **109 cases**, every matrix run under both inte
 - `apex-verify` against a real Tier-A claim with file-reading evidence.
 - `references/empirical_claims.md` is distilled from a real multi-week experiment log, but
   has not yet been used to gate a live experiment in this harness.
+- Whether `record-nudge` actually changes behaviour — that it fires correctly is covered by
+  the suite, but whether being told makes the write-up happen is the claim that matters, and
+  it needs live use to judge.
 
 ## Credits
 

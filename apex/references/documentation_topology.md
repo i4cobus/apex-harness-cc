@@ -80,7 +80,34 @@ rather than duplicating them. See `matrix_template.md`.
 
 If a module is omitted, state exactly: **Not implemented in the current version.**
 
-## 6. What earns a place in the always-loaded file
+## 6. Where a fact goes — and the place that looks right but is not
+
+Two destinations, both in version control, both in the repository you are working in:
+
+| | Where | Cost | What belongs |
+|---|---|---|---|
+| **The knowledge base** | `docs/` in the working repository | only when read | Findings, numbers with provenance, protocols, experiment records, retracted claims — the substance |
+| **The always-loaded project file** | `CLAUDE.md` / `AGENTS.md` | every session, every task | Only what changes what you do right now, plus one-line pointers into `docs/` — see §7 |
+
+**Do not use the agent's own memory store.** Claude Code offers one (an auto-memory
+directory outside the repository); other agents have equivalents. It is the wrong place for
+anything that matters here, for reasons that are structural rather than a matter of taste:
+
+- it is **not in version control** — no history, no diff, no review, and it cannot be
+  reverted when it turns out to be wrong;
+- it is **invisible to everyone else** — a falsified approach recorded only there gets
+  retried by the next person, who has no way to see it, which is the exact cost the record
+  existed to prevent;
+- it **does not travel with the repository** — clone the repo elsewhere and the knowledge
+  is gone, while the code that depends on it is not;
+- it is **keyed to a working directory**, so moving or renaming the project silently
+  orphans it.
+
+A harness whose central claim is that state must be externalized somewhere it survives
+cannot then put the state somewhere private, unversioned and unreviewable. Write it to
+`docs/`.
+
+## 7. What earns a place in the always-loaded file
 
 Most repos have one file the agent reads on every session (`CLAUDE.md`, `AGENTS.md`, a
 project README). Its budget is the scarcest in the repo: everything in it is paid for on
@@ -93,7 +120,7 @@ thing right now?"**
 |---|---|
 | **Negative knowledge** — what has been tried and falsified, so it is not retried. One line + a pointer: `approach X: no gain, see docs/experiments.md §24` | The experiment, its numbers, and its conditions |
 | **Judgment guardrails** — the noise floor, hard limits (latency budget, memory ceiling), the invariant that looks optional but is not | Per-case tables answering "how much exactly" |
-| **Definition-change dates** — and the warning that figures across them are not comparable (§7) | The definitions themselves |
+| **Definition-change dates** — and the warning that figures across them are not comparable (§8) | The definitions themselves |
 | Environment, paths, commands, traps specific to this repo | Detailed procedures executed by following them step by step |
 
 Negative knowledge is the most valuable and the most often dropped: it is the only class
@@ -103,7 +130,7 @@ Do not migrate content for its own sake — move it the next time you are editin
 anyway. The one case that justifies a dedicated pass is a long list re-read on every
 session; compressing that buys the most context back.
 
-## 7. Definition changes must be dated in place
+## 8. Definition changes must be dated in place
 
 When an evaluation set, scoring rule, label definition, filtering step, or data contract
 changes, every figure recorded before it stops being comparable with every figure after —
@@ -113,7 +140,7 @@ Two records are required, and neither substitutes for the other:
 
 1. In the affected doc, at the point of change:
    `⚠ Definition changed <date>: <what changed>. Figures spanning this date are not comparable.`
-2. In the always-loaded file (§6), one line with the date, so the next session cannot
+2. In the always-loaded file (§7), one line with the date, so the next session cannot
    compare across it by accident.
 
 The same discipline applies to figures themselves: **record the command/script, the date,
@@ -124,7 +151,7 @@ or compared, and later readers have less context than you, not more. See
 Stale beats missing is false here: a wrong-but-confident number outlives the person who
 knew its caveat.
 
-## 8. Moving content changes its reader
+## 9. Moving content changes its reader
 
 Relocating a document is not copying it. A note written by one person for themselves and
 the same text inside a shared source-of-truth doc are **different artifacts**, because the
@@ -149,7 +176,7 @@ re-judge **each paragraph** against the new reader:
 Content that cannot be made safe for the new reader stays where it is, and gets referenced
 rather than inlined.
 
-## 9. One document, one lifetime
+## 10. One document, one lifetime
 
 Two rules decide what belongs in the same file:
 
@@ -160,7 +187,7 @@ Two rules decide what belongs in the same file:
   was measured under must stay valid. Putting the protocol inside the report rots the
   protocol on the report's schedule.
 
-## 10. Alignment check
+## 11. Alignment check
 
 When implementation changes materially: update affected leaf docs; update `docs/design/`
 if structure changed; update the matrix if coverage/status changed; update integration

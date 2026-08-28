@@ -127,7 +127,7 @@ evidence; treat it as an anecdote.
 
 The moment an evaluation set, a scoring rule, a label definition, or a filtering step
 changes, figures from before and after are not comparable — silently, and in a way that
-looks exactly like a result. See `documentation_topology.md` §7 for how to record it.
+looks exactly like a result. See `documentation_topology.md` §8 for how to record it.
 
 ## Checklist before reporting a quantitative claim
 

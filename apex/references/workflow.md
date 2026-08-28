@@ -112,8 +112,28 @@ If none of the above applies, choose the most defensible implementation and cont
 7. Implement the most defensible version.
 8. Verify (existing tests → `verify` → `code-review` → adversarial for high blast) and
    iterate until criteria are met or a hard boundary is reached.
-9. Sync documentation if scope requires (`documentation_topology.md`).
+9. Review the record for completeness (`documentation_topology.md`) — see below: this is a
+   review, not the moment you start writing.
 10. Update the handoff snapshot only if the user explicitly asked for handoff.
+
+### Recording is not step 9
+
+Write a finding down when you find it. A step scheduled at the end of a long task is
+scheduled at the point of least remaining context and least remaining attention — which is
+exactly why it is the step that gets skipped, and why the person you work for ends up having
+to ask for it every time.
+
+Record at the moment of discovery, not at the end:
+
+| When | What |
+|---|---|
+| the instant an approach is falsified | the negative result — the most expensive thing to lose, because without it someone repeats the work |
+| when a number is measured | the number with its command, date, and sample size |
+| when a definition changes | the change, its date, and that figures across it are not comparable |
+| when a decision is taken | the decision and what it cost |
+
+Step 9 is then a check — *is anything still only in the conversation?* — not a writing
+session. Compaction and session end are deadlines that arrive without warning.
 
 ## 5. Harness rules
 
