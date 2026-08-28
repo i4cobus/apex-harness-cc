@@ -203,6 +203,12 @@ Python 3.11). Regression suites: **105 cases**, every matrix run under both inte
   silent outside marked trees and fires inside them.
 - **Fail-open paths tested**: with `jq` removed from `PATH`, all three hooks exit 0 silently
   on input that otherwise blocks; `fs-guard` also allows when `git` is absent.
+- **End-to-end in a live session**: with the hooks wired into `~/.claude/settings.json`,
+  deleting an untracked scratch file produced a real permission prompt — `permissionDecision:
+  "ask"` renders as a dialog, it is not advisory. Confirmed against the session's own ledger
+  file, whose name matches the session id, so the trigger was the installed hook rather than
+  a manual script run. `env-guard` also blocked two real commands during that install, both
+  of them false positives, which is how the quoted-separator bug was found.
 
 **Skill and workflow**
 
@@ -212,9 +218,6 @@ Python 3.11). Regression suites: **105 cases**, every matrix run under both inte
 
 **Not yet exercised**
 
-- `fs-guard`'s `permissionDecision: "ask"` output has been validated as *JSON*, but the
-  resulting permission prompt has not been observed end-to-end in a live Claude Code
-  session. Install it and delete an untracked scratch file once to confirm.
 - Hook behavior on Linux / Windows.
 - `apex-verify` against a real Tier-A claim with file-reading evidence.
 - `references/empirical_claims.md` is distilled from a real multi-week experiment log, but
