@@ -3,8 +3,8 @@
 A Claude Code-native port of the APEX execution discipline (originally a Codex skill;
 upstream core idea: <https://github.com/4everWZ/apex-harness>). It keeps APEX's strong
 cognitive core, rewrites the platform glue for Claude Code, **sinks the mechanizable rules
-into hooks**, and **adds the two dimensions the original lacked**: adversarial verification
-and orchestration / context budget.
+into hooks**, and **adds the dimensions the original lacked**: adversarial verification,
+orchestration / context budget, and empirical-claim discipline.
 
 ## Why this exists
 
@@ -17,11 +17,12 @@ port keeps the good parts and addresses both gaps:
 2. **Claude Code port** (`apex/SKILL.md` + `apex/references/`) — the kernel mapped onto CC
    primitives: plan mode, the `verify` / `code-review` skills, the Agent / Workflow tools.
 3. **Guardrails** (`hooks/`) — rules that reduce to a deterministic check become hooks, not
-   admonitions: a hard env-hygiene gate, always-load-the-kernel, and a conservative
-   anti-bluff completion check.
-4. **Added dimensions** — `references/verification.md` (adversarial verification) and
-   `references/orchestration.md` (context budget & fan-out), plus a ready-to-run
-   `workflows/apex-verify.js`.
+   admonitions: a hard env-hygiene gate, a recoverability gate on destructive filesystem
+   operations, always-load-the-kernel, and a conservative anti-bluff completion check.
+4. **Added dimensions** — `references/verification.md` (adversarial verification),
+   `references/orchestration.md` (context budget & fan-out), and
+   `references/empirical_claims.md` (how a measurement earns the right to be called a
+   result), plus a ready-to-run `workflows/apex-verify.js`.
 
 ## The three-layer model
 
@@ -37,7 +38,7 @@ delivery.
 ## Layout
 
 ```
-apex-cc-harness/
+apex-harness-cc/
 ├── README.md                      # this file
 ├── apex/                          # ← the skill: copy into a Claude Code skills dir
 │   ├── SKILL.md                   # CC-native skill (frontmatter + routing)
@@ -45,6 +46,7 @@ apex-cc-harness/
 │   └── references/
 │       ├── workflow.md            # Tier A/B/C, verification policy, consultation boundary
 │       ├── verification.md        # ADDED: adversarial verification
+│       ├── empirical_claims.md    # ADDED: what makes a measured claim defensible
 │       ├── orchestration.md       # ADDED: context budget & fan-out
 │       ├── documentation_topology.md
 │       ├── matrix_template.md
@@ -52,10 +54,12 @@ apex-cc-harness/
 │       └── status_template.md
 ├── hooks/                         # ← guardrails: wire into settings.json
 │   ├── env-guard.sh               # PreToolUse(Bash): hard deny deps into base/system py
+│   ├── fs-guard.sh                # PreToolUse(Bash|Write): ask before destroying untracked files
 │   ├── load-kernel.sh             # SessionStart: inject the kernel
 │   ├── completion-gate.sh         # Stop: conservative anti-bluff check (opt-in)
 │   ├── settings.snippet.json      # hook wiring to merge into settings.json
-│   └── README.md                  # what each hook enforces; what can't be mechanized
+│   ├── test-*.sh / *-cases.tsv    # regression suites (99 cases, bash 3.2 + 5.x)
+│   └── README.md                  # what each hook enforces; what is deliberately not mechanized
 └── workflows/
     └── apex-verify.js             # reusable adversarial-verification workflow
 ```
@@ -82,14 +86,16 @@ replacing `APEX_HOME` with the absolute path to this folder, then `chmod +x hook
 > not the same: in testing, hooks placed in a *project* `.claude/settings.json` were **not
 > picked up** (e.g. when the session's working dir is a subdirectory of the repo), while
 > user-level hooks loaded reliably. Verify with `/hooks` after a restart — it should list
-> `PreToolUse·Bash`, `SessionStart`, and `Stop`. If it's empty, the hooks aren't active.
-> Note: user-level hooks apply to *every* project (`env-guard` is safe globally; the
-> `SessionStart` kernel injection adds ~1.1k tokens to every session — see Cost below).
+> `PreToolUse·Bash`, `PreToolUse·Write`, `SessionStart`, and `Stop`. If it's empty, the
+> hooks aren't active.
+> Note: user-level hooks apply to *every* project. `env-guard` and `fs-guard` are safe
+> globally; the `SessionStart` kernel injection adds ~1.2k tokens to every session, which
+> `APEX_SCOPE=marker` limits to projects carrying a `.apex` marker — see Cost below.
 
 After editing settings, **restart Claude Code** (or start a new session) so the hooks
-register. Requires `jq` on PATH; hooks fail open (allow) if it's missing. See
-`hooks/README.md` for exactly what each hook enforces and the limits of what can be
-mechanized.
+register. Requires `jq` on PATH (`fs-guard` also requires `git`); hooks fail open (allow) if
+either is missing. See `hooks/README.md` for exactly what each hook enforces, what is
+**deliberately not** mechanized, and how to run the regression suites.
 
 ### 3. The verification workflow (optional)
 Copy `workflows/apex-verify.js` into `<repo>/.claude/workflows/` to invoke it by name, or
@@ -111,8 +117,10 @@ Workflow apex-verify  args={ "claim": "...", "evidence": ["path:line", "test cmd
 | Structured docs (specs/matrix/tradeoffs/status) | `references/*_template.md`. |
 | Env hygiene (no deps into base/system) | **Mechanized**: `hooks/env-guard.sh` (hard deny). |
 | Don't fake completeness | Kernel §3 + **`hooks/completion-gate.sh`**. |
+| — (missing in original) Recoverability before destroying | **Added**: kernel §8 + **`hooks/fs-guard.sh`** (asks, doesn't deny). |
 | — (missing in original) Beyond one context | **Added**: `references/orchestration.md`. |
 | — (missing in original) Adversarial checking | **Added**: `references/verification.md` + `workflows/apex-verify.js`. |
+| — (missing in original) Defensible measured claims | **Added**: `references/empirical_claims.md`. |
 
 ## Reusing the kernel on other agents
 
@@ -124,42 +132,88 @@ workflow verbatim — those are Claude Code-shaped.
 
 ## Cost
 
-The harness is designed to be proportionate, but it is not free:
+The harness is designed to be proportionate, but it is not free.
 
-- **Always-on:** the `SessionStart` hook injects `KERNEL.md` (~1.1k tokens) into **every**
-  session. It rides in early context, so prompt caching amortizes the per-turn cost.
-- **On invoke:** `SKILL.md` (~1.4k tokens) loads only when the `apex` skill is invoked.
-  `references/` load lazily — only the ones you route to.
-- **Hooks:** zero token cost on the happy path; `env-guard` / `completion-gate` emit
-  ~120–150 tokens only when they actually block.
-- **Behavioral (the real driver):** higher tiers spend more on *verification tool calls*.
-  Tier C ≈ negligible; Tier A adversarial verification (`apex-verify`) is the single most
-  expensive operation. **Measured:** a trivial 5-agent smoke test cost **~114k tokens**
-  (~23k/agent — opus subagents carry fixed system-prompt + reasoning overhead regardless of
-  how little they read). A realistic 7-agent run with real file reading is **~160k–400k
-  tokens**. By design, and opt-in — reserve it for claims where a wrong answer is costly.
+**Context**
 
-To drop the only cross-project tax, remove the `SessionStart` hook and let the kernel
-arrive via skill invocation instead.
+| What | When | Size |
+|---|---|---|
+| `KERNEL.md` | every session, via the `SessionStart` hook | **~1.2k tokens** |
+| `SKILL.md` | only when the `apex` skill is invoked | ~1.6k tokens |
+| `references/workflow.md` | routed to on demand | ~2.3k |
+| `references/documentation_topology.md` | routed to on demand | ~2.1k |
+| `references/empirical_claims.md` | routed to on demand | ~1.8k |
+| `references/orchestration.md` | routed to on demand | ~1.2k |
+| `references/verification.md` | routed to on demand | ~1.1k |
+| `references/*_template.md` | routed to on demand | 0.2–0.4k each |
+
+The kernel is the only unconditional cost, and it rides in early context so prompt caching
+amortizes the per-turn price. If you do not want it in unrelated projects, set
+`APEX_SCOPE=marker` (see `hooks/README.md`) and let it arrive via skill invocation instead.
+
+**Hooks** — zero tokens on the happy path; they emit ~120–200 tokens only when they fire.
+Latency per tool call, measured on macOS (Apple silicon, warm, 40 iterations):
+
+| Hook | Path | Latency |
+|---|---|---|
+| `fs-guard` | nothing destructive in the command (pre-filter, no `git` call) | ~15 ms |
+| `fs-guard` | destructive verb, or `Write` to an existing file → one `git status` per target | ~36 ms |
+| `env-guard` | any Bash call | ~30 ms |
+
+**Behavioral (the real driver)** — higher tiers spend more on *verification tool calls*.
+Tier C ≈ negligible; Tier A adversarial verification (`apex-verify`) is the single most
+expensive operation. **Measured:** a trivial 5-agent smoke test cost **~114k tokens**
+(~23k/agent — opus subagents carry fixed system-prompt + reasoning overhead regardless of
+how little they read). A realistic 7-agent run with real file reading is **~160k–400k
+tokens**. By design, and opt-in — reserve it for claims where a wrong answer is costly.
 
 ## Status / what's been verified
 
-Validated live on macOS (Claude Code, `jq` present, Python 3.11):
+Validated live on macOS (Claude Code, `jq` + `git` present, bash 3.2.57 and 5.3.15,
+Python 3.11). Regression suites: **99 cases**, every matrix run under both interpreters.
+
+**Hooks**
+
 - `env-guard` parses each sub-command's leading program (not substring-scanning the whole
   line), so it blocks bare `pip/conda/uv pip` installs **and** chain-bypasses like
   `uv run x && pip install evil`, while allowing the documented safe workflows
   (activate-then-install, `conda run -n proj …`, `uv venv && uv pip install`, `uv add`) and
-  commands that merely mention an install in a quoted string. Covered by a 36-case
-  regression suite (`hooks/test-env-guard.sh`) passing on bash 3.2 and 5.3.
-- `load-kernel` injects the kernel at session start.
-- `completion-gate` parses the real transcript format and triggers only on hedged-without-evidence endings.
-- The `apex` skill and `apex-verify` workflow load and route correctly.
+  commands that merely mention an install in a quoted string. 36 cases,
+  `hooks/test-env-guard.sh`.
+- `fs-guard` asks on the untracked-and-not-ignored class only, and stays silent for tracked
+  files, ignored files, cache/junk paths, paths outside the repo, `>>` appends, `tee -a`,
+  `git clean -n`, and `mv`/`cp` whose *source* is untracked. It follows chains
+  (`ls && rm x`), does not fire on commands that merely mention a deletion, and asks about
+  a given path at most once per session, and never about a file this session itself created.
+  Absolute paths (the shape Claude Code actually sends) are covered, including the macOS
+  `/var` → `/private/var` symlink case that a textual prefix match gets wrong. 50 cases plus
+  ledger and ownership checks, `hooks/test-fs-guard.sh`. The emitted JSON was checked
+  against the documented `permissionDecision` shape.
+- `completion-gate` reads **only the last assistant message** (verified against a real
+  transcript) and matches hedge/evidence terms on word boundaries. 13 cases,
+  `hooks/test-completion-gate.sh`. The previous version fails 4 of those 13 — all in the
+  permissive direction (evidence from an earlier turn excusing this one; `latest` and
+  `testimonial` counting as a `test`; a subagent reply counting as this turn's).
+- `load-kernel` injects the kernel at session start; `APEX_SCOPE=marker` correctly stays
+  silent outside marked trees and fires inside them.
+- **Fail-open paths tested**: with `jq` removed from `PATH`, all three hooks exit 0 silently
+  on input that otherwise blocks; `fs-guard` also allows when `git` is absent.
+
+**Skill and workflow**
+
+- The `apex` skill and the `apex-verify` workflow load and route correctly.
 - `apex-verify` **run live** (5-agent smoke test): fan-out, schema-structured returns, and
   synthesis verdict all worked; the claim survived with no dissents.
 
-Not yet exercised: hook behavior on Linux/Windows and the `jq`-absent fail-open path have
-not been tested. `apex-verify` has been smoke-tested but not run against a real Tier-A
-claim with file-reading evidence.
+**Not yet exercised**
+
+- `fs-guard`'s `permissionDecision: "ask"` output has been validated as *JSON*, but the
+  resulting permission prompt has not been observed end-to-end in a live Claude Code
+  session. Install it and delete an untracked scratch file once to confirm.
+- Hook behavior on Linux / Windows.
+- `apex-verify` against a real Tier-A claim with file-reading evidence.
+- `references/empirical_claims.md` is distilled from a real multi-week experiment log, but
+  has not yet been used to gate a live experiment in this harness.
 
 ## Credits
 

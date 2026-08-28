@@ -46,6 +46,13 @@ When you do orchestrate, prefer:
 - **coverage over silence** — when a sweep bounds itself (top-N, sampling, no-retry), say
   what was dropped. Silence reads as "covered everything" when it wasn't.
 
+## Briefing a delegate
+
+A subagent starts with none of your context: it cannot see what you have already ruled out,
+what "done" looks like here, or which constraints the repo does not make obvious. State
+those three or it will re-derive them, sometimes wrongly. "Continue the previous work" is
+not a brief, and neither is a task title.
+
 ## Mapping to APEX tiers
 
 - **Tier C** — never orchestrate. Inline.

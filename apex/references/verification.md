@@ -33,6 +33,18 @@ Reach for adversarial verification when a wrong-but-plausible result would be ex
 
 For routine Tier B/C work, single-pass verification (ladder 1–3) is enough.
 
+## When the claim is a measurement
+
+Adversarial verification is the wrong first tool for a claim that rests on a number. A
+skeptic handed the same confounded experiment reads the same numbers and reaches the same
+wrong conclusion — independence does not fix a design flaw, it replicates it.
+
+Run `empirical_claims.md` first: was the prediction pre-registered, are the claim's
+conditions stated, can the metric still resolve the change, does the delta clear the noise
+floor, does every figure carry its provenance? Then, if the stakes justify it, put the
+*surviving* claim in front of a refuter panel — and give the panel the experimental design,
+not just the conclusion.
+
 ## Patterns
 
 ### Independent skeptics (majority refute → kill)

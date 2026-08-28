@@ -82,8 +82,11 @@ write decisions and status to durable files, not just into the conversation:
 
 Keep these proportionate. Do not manufacture heavy docs for small edits.
 
-## 8. Keep the workspace clean
+## 8. Keep the workspace clean and recoverable
 
+- Before deleting or overwriting anything, confirm it is recoverable. Content version
+  control has never seen leaves **no trace** when destroyed: no history, no copy, and your
+  own session record expires. "It looks like a temp file" is not evidence that it is one.
 - Identify the intended target environment before any interpreter, package manager, or
   dependency-changing command. Never install project deps into a shared/base/system/
   global environment unless explicitly asked.

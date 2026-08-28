@@ -7,8 +7,15 @@
 # this turn — must allow then, or we loop) and `transcript_path`.
 # Exit 2 + stderr => Claude continues with the message. Exit 0 => allow stop.
 #
-# This is intentionally narrow to avoid nagging. Remove it from settings if unwanted.
+# Deliberately biased toward allowing: a nagging completion gate gets uninstalled, and then
+# the env/fs guards go with it. Two properties keep the false-positive rate down:
+#   1. it reads ONLY the last assistant message — not a byte window that can straddle
+#      several turns, where a hedge in one turn meets evidence from another;
+#   2. hedge and evidence terms are matched on WORD boundaries — "latest" is not evidence
+#      of a "test", and "brand" is not evidence that something "ran".
+# Both were bugs in the first version; `test-completion-gate.sh` pins them.
 
+set -u
 input="$(cat)"
 command -v jq >/dev/null 2>&1 || exit 0
 
@@ -16,26 +23,29 @@ command -v jq >/dev/null 2>&1 || exit 0
 [ "$(printf '%s' "$input" | jq -r '.stop_hook_active // false')" = "true" ] && exit 0
 
 transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty')"
-[ -z "$transcript" ] || [ ! -f "$transcript" ] && exit 0
+{ [ -z "$transcript" ] || [ ! -f "$transcript" ]; } && exit 0
 
-# Last assistant text block in the transcript.
-last="$(jq -r 'select(.message.role=="assistant") | .message.content[]? | select(.type=="text") | .text' "$transcript" 2>/dev/null | tail -c 4000)"
+# The LAST assistant message that carries text, as one string. Streamed line-by-line
+# (one JSON string per message) rather than slurped, so a long transcript stays cheap.
+# Sidechain entries are subagent transcripts, not this turn's reply.
+enc="$(jq -r '
+        select(.isSidechain != true)
+      | select(.message.role == "assistant")
+      | [ .message.content[]? | select(.type == "text") | .text ]
+      | join("\n")
+      | select(length > 0)
+      | @json' "$transcript" 2>/dev/null | tail -1)"
+[ -z "$enc" ] && exit 0
+last="$(printf '%s' "$enc" | jq -r . 2>/dev/null)"
 [ -z "$last" ] && exit 0
-lc="$(printf '%s' "$last" | tr '[:upper:]' '[:lower:]')"
 
-# Hedged success claim?
-hedged=false
-case "$lc" in
-  *"should work"*|*"should now work"*|*"probably works"*|*"i think this works"*|\
-  *"this should fix"*|*"that should do it"*|*"likely works"*|*"ought to work"*) hedged=true ;;
-esac
-$hedged || exit 0
+# A hedged success claim — the shape of "I did not check, but let us call it done".
+HEDGE='should (now )?(work|be working|fix|do it)|probably (works|fixes)|likely works|ought to work|i (think|believe) (this|it) (works|fixes)|that should do it|presumably works'
+printf '%s' "$last" | grep -qiE "$HEDGE" || exit 0
 
-# Any sign verification happened or limits were stated honestly? Then allow.
-case "$lc" in
-  *"test"*|*"verified"*|*"verify"*|*"ran "*|*"output"*|*"passed"*|*"observed"*|\
-  *"not verified"*|*"unverified"*|*"could not"*|*"unable to"*|*"blocker"*|*"caveat"*) exit 0 ;;
-esac
+# Any sign that verification happened, or that the limits were stated honestly? Then allow.
+EVIDENCE='\b(tested|testing|ran|running|passed|failed|observed|output|reproduced|confirmed)\b|\bverif(y|ied|ication)\b|\b(not verified|unverified|untested|could not|unable to|blocker|caveat|assumption)\b'
+printf '%s' "$last" | grep -qiE "$EVIDENCE" && exit 0
 
 >&2 cat <<'MSG'
 [apex-guardrail] Completion check (kernel §3 — do not bluff):

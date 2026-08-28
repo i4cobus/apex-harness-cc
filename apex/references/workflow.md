@@ -46,6 +46,8 @@ skill (reviews the diff), and — for high-blast claims — adversarial subagent
 - observability check (output of the changed claim is actually seen)
 - critical review of assumptions and risk — run `code-review` on the diff
 - **adversarial verification** of the central claim (`apex-verify` workflow or Agent fan-out)
+- if the claim rests on a measurement, the `references/empirical_claims.md` checklist —
+  pre-registered prediction, stated conditions, noise floor, provenance
 - a dedicated harness only when existing tests cannot isolate the claim
 - an autonomous verify→fix loop until criteria are met or a hard boundary is hit
 - documentation sync where source-of-truth docs exist/are needed
@@ -147,9 +149,26 @@ Handoff is user-requested. When asked: create/refresh the status snapshot
 blockers/risks, next steps, references. Keep it a current-state snapshot, not a diary;
 link to the matrix for requirement-level status.
 
-## 8. Environment policy
+## 8. Environment and workspace policy
 
-Repository-native tooling first.
+Repository-native tooling first, and nothing destroyed that cannot be recovered.
+
+### Recoverability
+
+Before deleting, moving onto, or truncating any path, know which class it is in:
+
+| Class | Recovery | Action |
+|---|---|---|
+| Tracked by version control | `git checkout` / history | Proceed. |
+| Ignored (declared build product) | Regenerate it | Proceed. |
+| **Untracked and not ignored** | **None — no history, no copy, and the session record expires** | Snapshot (`git add -A && git commit`) or move it aside before touching it. |
+| Outside any repository | Unknown | Treat as the untracked class; ask. |
+
+"It looks like a temp file" and "I probably generated it myself" are not evidence. The
+`fs-guard` PreToolUse hook turns the untracked case into a user prompt rather than a silent
+loss — but it can only see paths inside a git work tree, so the judgment above still applies
+everywhere else (see `../hooks/README.md`).
+
 
 - Identify the intended target environment before any interpreter, package manager, or
   dependency-changing command.

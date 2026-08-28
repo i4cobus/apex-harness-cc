@@ -1,0 +1,67 @@
+# WANT<TAB>TOOL<TAB>PAYLOAD    (K = must ask, A = must allow silently)
+# Fixture (see test-fs-guard.sh): tracked.md + .gitignore committed; untracked.md,
+# sub/untracked2.md, __pycache__/mod.pyc, .DS_Store untracked; *.log and build/ ignored.
+#
+# --- the class the hook exists for -------------------------------------------------------
+K	Bash	rm untracked.md
+K	Bash	rm -rf sub
+K	Bash	rm -r -- untracked.md
+K	Bash	rm -f untracked.md tracked.md
+# --- recoverable classes must stay silent ------------------------------------------------
+A	Bash	rm tracked.md
+A	Bash	rm ignored.log
+A	Bash	rm build/artifact.bin
+A	Bash	rm -rf build
+A	Bash	rm nonexistent.md
+# --- junk allowlist: untracked, but nobody wants a prompt for these -----------------------
+A	Bash	rm __pycache__/mod.pyc
+A	Bash	rm -rf __pycache__
+A	Bash	rm .DS_Store
+# --- outside the repo: nothing can be proven, fail open ----------------------------------
+A	Bash	rm /tmp/apex-fs-guard-nothing-here
+# --- truncating redirects ----------------------------------------------------------------
+K	Bash	echo x > untracked.md
+K	Bash	python gen.py 1> untracked.md
+A	Bash	echo x >> untracked.md
+A	Bash	echo x > tracked.md
+A	Bash	echo x > brand-new.md
+A	Bash	echo x > ignored.log
+A	Bash	python gen.py 2>&1
+# --- mv / cp: only the destination can lose content ---------------------------------------
+K	Bash	cp tracked.md untracked.md
+K	Bash	mv tracked.md untracked.md
+A	Bash	mv untracked.md renamed.md
+A	Bash	cp untracked.md copy.md
+A	Bash	mv -f untracked.md tracked.md
+# --- tee -----------------------------------------------------------------------------------
+K	Bash	cat x | tee untracked.md
+A	Bash	cat x | tee -a untracked.md
+A	Bash	cat x | tee tracked.md
+# --- git clean is exactly this class --------------------------------------------------------
+K	Bash	git clean -fd
+K	Bash	git clean --force
+A	Bash	git clean -n
+A	Bash	git clean -nd
+A	Bash	git status
+# --- chains: a destructive part anywhere in the chain must still be seen ---------------------
+K	Bash	ls -la && rm untracked.md
+K	Bash	echo ok; rm -rf sub
+A	Bash	ls -la && cat tracked.md
+# --- must NOT fire on commands that merely mention a deletion --------------------------------
+A	Bash	grep -n "rm untracked.md" tracked.md
+A	Bash	git commit -m "remove untracked.md"
+A	Bash	echo "a > b"
+A	Bash	ls -la
+A	Bash	cat untracked.md
+# --- absolute paths: the shape Claude Code actually sends ------------------------------------
+K	Write	%FIX%/untracked.md
+A	Write	%FIX%/tracked.md
+K	Bash	rm %FIX%/untracked.md
+A	Bash	rm %FIX%/tracked.md
+A	Bash	rm /tmp/definitely-not-in-this-repo.md
+# --- Write tool: overwriting a file git has never seen is the 2026-08-25 shape ---------------
+K	Write	untracked.md
+A	Write	tracked.md
+A	Write	brand-new.md
+A	Write	ignored.log
+

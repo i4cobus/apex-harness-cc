@@ -1,25 +1,47 @@
 {
-  "_comment": "APEX guardrails for Claude Code. Merge the `hooks` block into your settings.json (~/.claude/settings.json for global, or <repo>/.claude/settings.json for project). Replace APEX_HOME with the absolute path to the apex-cc-harness folder. The completion-gate Stop hook is opt-in — drop that block if you don't want it.",
+  "_comment": "APEX guardrails for Claude Code. Merge the `hooks` block into your settings.json (~/.claude/settings.json — project-level hooks were not picked up reliably in testing). Replace APEX_HOME with the absolute path to the apex-harness-cc folder. The completion-gate Stop hook is opt-in — drop that block if you don't want it. Optional env: APEX_SCOPE=marker limits kernel injection to projects with a .apex marker; APEX_FS_GUARD=off disables fs-guard.",
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "APEX_HOME/hooks/env-guard.sh" }
+          {
+            "type": "command",
+            "command": "APEX_HOME/hooks/env-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "APEX_HOME/hooks/fs-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "APEX_HOME/hooks/fs-guard.sh"
+          }
         ]
       }
     ],
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "APEX_HOME/hooks/load-kernel.sh" }
+          {
+            "type": "command",
+            "command": "APEX_HOME/hooks/load-kernel.sh"
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "APEX_HOME/hooks/completion-gate.sh" }
+          {
+            "type": "command",
+            "command": "APEX_HOME/hooks/completion-gate.sh"
+          }
         ]
       }
     ]

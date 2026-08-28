@@ -1,6 +1,6 @@
 ---
 name: apex
-description: Disciplined execution harness for substantial coding, refactoring, architecture, research, or ML work that needs risk-calibrated effort, evidence-closed verification, clear user decision points, and durable docs (specs, design docs, coverage matrices, tradeoff logs, handoff records). Routes verification through plan mode, the verify/code-review skills, and adversarial subagent checks. Do NOT use for trivial low-risk edits (minor UI text, comments, narrow obvious fixes).
+description: Disciplined execution harness for substantial coding, refactoring, architecture, research, or ML work that needs risk-calibrated effort, evidence-closed verification, defensible quantitative/experimental claims, clear user decision points, and durable docs (specs, design docs, coverage matrices, tradeoff logs, handoff records). Routes verification through plan mode, the verify/code-review skills, and adversarial subagent checks. Do NOT use for trivial low-risk edits (minor UI text, comments, narrow obvious fixes).
 ---
 
 # APEX Harness (Claude Code)
@@ -32,11 +32,13 @@ by hooks (see `../hooks/`); the rest you execute through these native moves:
 |---|---|
 | Calibrate effort (Tier A/B/C) | For Tier A or substantial Tier B, **enter plan mode** before implementing; present tier + success criteria + verification path, get sign-off via ExitPlanMode. |
 | Close the loop with evidence | Run `verify` to drive the real app/behavior; run `code-review` on the diff. Existing tests first; a dedicated harness only when they can't localize the claim. |
+| Close the loop on a *measured* claim | Run the `references/empirical_claims.md` checklist before reporting any number as a result. |
 | Adversarial verification (added) | For high-blast claims, fan out independent skeptics via the `apex-verify` workflow or the Agent tool — see `references/verification.md`. |
 | Don't bluff / completion gate | Honor the completion rules in `references/workflow.md`; the `completion-gate` Stop hook reminds you before finishing. |
 | Hold scope; surface tradeoffs | Use AskUserQuestion only at the consultation boundary (`references/workflow.md` §3). Record approved deviations via `references/tradeoff_template.md`. |
 | Externalize state | Maintain `docs/` artifacts per `references/documentation_topology.md`; coverage in `docs/matrix_*.md`; handoff only when asked. |
 | Keep workspace clean (env hygiene) | Enforced by the `env-guard` PreToolUse hook — deps cannot be installed into base/system/global Python. |
+| Keep workspace recoverable | Enforced by the `fs-guard` PreToolUse hook — destroying a path git has never seen becomes a user decision, not a silent loss. |
 | Scale beyond one context | Decompose with the Agent/Workflow tools per `references/orchestration.md`. |
 
 ## Activation output
@@ -55,6 +57,9 @@ ceremony):
   consultation boundary, harness rules, completion rules, handoff, environment policy.
 - `references/verification.md` — evidence standards and **adversarial verification**
   (independent skeptics, perspective-diverse panels, the `apex-verify` workflow).
+- `references/empirical_claims.md` — **how a measurement earns the right to be called a
+  result**: pre-registration, interactions, saturated metrics, noise floor, retractions,
+  provenance. Route here before any "X improves Y".
 - `references/orchestration.md` — **context budget and fan-out**: when to stay inline,
   when to spawn subagents, when to run a Workflow; pipeline vs barrier.
 - `references/documentation_topology.md` — what belongs in `docs/specs/`, `docs/design/`,
@@ -70,6 +75,9 @@ ceremony):
 - "The shape / schema / config probably is…" without reading the source of truth.
 - "Docs can be updated later" after a source-of-truth doc went stale or wrong.
 - "Small enough to skip classification."
+- "The number went up" with no noise floor, no stated conditions, and no provenance.
+- "This is probably a temp file / something I generated" before deleting or overwriting it.
+- Copying a personal note into a shared doc unchanged — the reader changed with it.
 - Creating/refreshing handoff docs without the user asking for handoff.
 
 ## Repository assumptions
