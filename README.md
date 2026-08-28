@@ -216,9 +216,13 @@ Python 3.11). Regression suites: **109 cases**, every matrix run under both inte
 - `apex-verify` **run live** (5-agent smoke test): fan-out, schema-structured returns, and
   synthesis verdict all worked; the claim survived with no dissents.
 
+**Out of scope**
+
+- Linux and Windows. The hooks are written for macOS + bash 3.2/5.x and have never run
+  elsewhere; nothing here claims they do.
+
 **Not yet exercised**
 
-- Hook behavior on Linux / Windows.
 - `apex-verify` against a real Tier-A claim with file-reading evidence.
 - `references/empirical_claims.md` is distilled from a real multi-week experiment log, but
   has not yet been used to gate a live experiment in this harness.
