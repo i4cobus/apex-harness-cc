@@ -167,9 +167,16 @@ esac
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 # ---- classify: which candidates hold files git has never seen? --------------------------
-# `git status --porcelain -uall -- <path>` prints `?? p` for exactly the unrecoverable
-# class. Tracked paths (recoverable via git) and ignored paths (declared products) do not
-# appear. A path outside the repo makes git error out -> nothing found -> allow.
+# `git status --porcelain -- <path>` prints `?? p` for exactly the unrecoverable class.
+# Tracked paths (recoverable via git) and ignored paths (declared products) do not appear.
+# A path outside the repo makes git error out -> nothing found -> allow.
+#
+# Deliberately NOT `-uall`: the default collapses a wholly-untracked directory to one
+# `?? dir/` line. Detection is identical (a tracked directory still lists its untracked
+# files one by one, and a pathspec aimed inside a collapsed directory still resolves), the
+# prompt reads better, and it avoids feeding thousands of lines through the loop below —
+# `rm -rf` on a 2000-file untracked directory took 4.1 s that way, essentially all of it in
+# this shell rather than in git. RISK_CAP bounds the remaining pathological case.
 is_junk() {
   case "${1##*/}" in
     .DS_Store|Thumbs.db|*.pyc|*.pyo) return 0 ;;
@@ -181,15 +188,18 @@ is_junk() {
   return 1
 }
 
-AT_RISK=$'\n'; n_risk=0
+AT_RISK=$'\n'; n_risk=0; capped=false
+RISK_CAP=200
 while IFS= read -r p; do
   [ -z "$p" ] && continue
+  $capped && break
   while IFS= read -r u; do
     [ -z "$u" ] && continue
+    if [ "$n_risk" -ge "$RISK_CAP" ]; then capped=true; break; fi
     is_junk "$u" && continue
     case "$AT_RISK" in *$'\n'"$u"$'\n'*) continue ;; esac
     AT_RISK="$AT_RISK$u"$'\n'; n_risk=$((n_risk+1))
-  done < <(git -c core.quotepath=false status --porcelain -uall -- "$p" 2>/dev/null \
+  done < <(git -c core.quotepath=false status --porcelain -- "$p" 2>/dev/null \
              | awk '/^\?\? /{sub(/^\?\? /,""); gsub(/^"|"$/,""); print}')
 done < <(printf '%s' "$CAND")
 
@@ -210,6 +220,7 @@ done < <(printf '%s' "$AT_RISK")
 
 shown="$(printf '%s' "$FRESH" | head -8)"
 [ "$n_fresh" -gt 8 ] && shown="$shown"$'\n'"  … and $((n_fresh-8)) more"
+$capped && shown="$shown"$'\n'"  (stopped listing at $RISK_CAP paths — there may be more)"
 
 reason="[apex-guardrail] kernel §8 — this would destroy files version control has never seen.
 

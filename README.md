@@ -158,6 +158,7 @@ Latency per tool call, measured on macOS (Apple silicon, warm, 40 iterations):
 |---|---|---|
 | `fs-guard` | nothing destructive in the command (pre-filter, no `git` call) | ~15 ms |
 | `fs-guard` | destructive verb, or `Write` to an existing file → one `git status` per target | ~36 ms |
+| `fs-guard` | worst case: `rm -rf` a tracked directory holding thousands of untracked files | ~490 ms |
 | `env-guard` | any Bash call | ~30 ms |
 
 **Behavioral (the real driver)** — higher tiers spend more on *verification tool calls*.

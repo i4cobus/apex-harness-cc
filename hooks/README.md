@@ -104,7 +104,13 @@ Measured on macOS (Apple silicon, warm cache, 40 iterations):
 | `fs-guard` | command cannot destroy anything (pre-filter exits before any `git` call) | **~15 ms** |
 | `fs-guard` | destructive verb, or `Write` to an existing file → one pathspec-limited `git status` per target | **~36 ms** |
 | `fs-guard` | `Write` to a new path (claims it, exits) | **~29 ms** |
+| `fs-guard` | `rm -rf` on a wholly-untracked 2000-file directory | **~77 ms** |
+| `fs-guard` | worst case: a *tracked* directory holding 2000 untracked files (hits `RISK_CAP`) | **~490 ms** |
 | `env-guard` | any Bash call | **~30 ms** |
+
+`git status` itself costs ~30 ms in all of these; the rest is this shell. The default
+untracked mode (not `-uall`) is what keeps the first large-directory case cheap — it
+collapses a wholly-untracked directory to one line instead of two thousand.
 
 `fs-guard`'s pre-filter is what keeps the common case cheaper than `env-guard`: most
 commands contain no `rm`/`mv`/`cp`/`tee`/`clean`/`>` at all and exit before touching git.
