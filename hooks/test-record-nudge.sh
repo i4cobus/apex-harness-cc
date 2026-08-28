@@ -36,57 +36,57 @@ check() { local got=quiet; case "$3" in *additionalContext*) got=nudge ;; esac
 run_all() {
   # --- growth-based re-arming ---
   new_fixture
-  check "SessionStart 只记基线，不出声"       quiet "$(fire SessionStart)"
-  check "没有改动 -> 静默"                     quiet "$(fire UserPromptSubmit)"
+  check "SessionStart records a baseline, says nothing"                  quiet "$(fire SessionStart)"
+  check "nothing changed -> silent"                                      quiet "$(fire UserPromptSubmit)"
   work a b c
-  check "改了 3 个（低于阈值 5）-> 静默"       quiet "$(fire UserPromptSubmit)"
+  check "3 files, below the threshold of 5 -> silent"                    quiet "$(fire UserPromptSubmit)"
   work d e
-  check "改到 5 个 -> 提醒"                    nudge "$(fire UserPromptSubmit)"
-  check "紧接着再问 -> 不重复唠叨"             quiet "$(fire UserPromptSubmit)"
+  check "5 files -> speaks"                                              nudge "$(fire UserPromptSubmit)"
+  check "asked again immediately -> does not repeat itself"              quiet "$(fire UserPromptSubmit)"
   work f g h
-  check "又多 3 个（未到 +5）-> 静默"          quiet "$(fire UserPromptSubmit)"
+  check "3 more, short of +5 -> silent"                                  quiet "$(fire UserPromptSubmit)"
   work i j
-  check "累计 +5 -> 再提醒"                    nudge "$(fire UserPromptSubmit)"
+  check "+5 since last time -> speaks again"                             nudge "$(fire UserPromptSubmit)"
 
   # --- compaction re-arms regardless of threshold ---
   new_fixture; fire SessionStart >/dev/null; work a
-  check "1 个改动，未到阈值 -> 静默"           quiet "$(fire UserPromptSubmit)"
-  check "PreCompact 自己不出声"                quiet "$(fire PreCompact)"
-  check "compact 后立刻提醒，不等阈值"         nudge "$(fire UserPromptSubmit)"
+  check "1 file, below threshold -> silent"                              quiet "$(fire UserPromptSubmit)"
+  check "PreCompact itself says nothing"                                 quiet "$(fire PreCompact)"
+  check "after a compaction it speaks without waiting for the threshold" nudge "$(fire UserPromptSubmit)"
 
   # --- recording silences it ---
   new_fixture; fire SessionStart >/dev/null; work a b c d e
-  check "先提醒一次"                           nudge "$(fire UserPromptSubmit)"
+  check "speaks once first"                                              nudge "$(fire UserPromptSubmit)"
   know found.md
-  check "写了知识层 -> 闭嘴"                   quiet "$(fire UserPromptSubmit)"
+  check "something was recorded -> goes quiet"                           quiet "$(fire UserPromptSubmit)"
   fire PreCompact >/dev/null
-  check "写过之后 compact 也不提醒"            quiet "$(fire UserPromptSubmit)"
+  check "still quiet through a compaction once recorded"                 quiet "$(fire UserPromptSubmit)"
 
   # --- a commit is not a record: baseline is session start, not HEAD ---
   new_fixture; fire SessionStart >/dev/null; work a b c d e
   ( cd "$FIX" && git add -A && git commit -qm wip ) >/dev/null 2>&1
-  check "已 commit 的改动仍然算未记录"         nudge "$(fire UserPromptSubmit)"
+  check "committing the work does not clear the debt"                    nudge "$(fire UserPromptSubmit)"
 
   # --- config and kill switches ---
   new_fixture; printf 'nudge_after = 2\n' > "$FIX/.apex"
   fire SessionStart >/dev/null; work a b
-  check ".apex 的 nudge_after=2 生效"          nudge "$(fire UserPromptSubmit)"
+  check "nudge_after=2 from .apex is honoured"                           nudge "$(fire UserPromptSubmit)"
   new_fixture; printf 'knowledge = notes/\n' > "$FIX/.apex"
   fire SessionStart >/dev/null; work a b c d e
   mkdir -p "$FIX/notes" && echo n > "$FIX/notes/x.md"
-  check ".apex 的 knowledge 路径覆盖默认值"    quiet "$(fire UserPromptSubmit)"
+  check "knowledge paths from .apex override the defaults"               quiet "$(fire UserPromptSubmit)"
   new_fixture; fire SessionStart >/dev/null; work a b c d e
-  check "APEX_NUDGE=off -> 静默"               quiet "$(cd "$FIX" && jq -nc --arg s "$SID" \
+  check "APEX_NUDGE=off -> silent"                                       quiet "$(cd "$FIX" && jq -nc --arg s "$SID" \
       '{hook_event_name:"UserPromptSubmit",session_id:$s}' | APEX_NUDGE=off "$SH" "$G" 2>/dev/null)"
-  check "不在 git 仓里 -> 静默"                quiet "$(cd /tmp && jq -nc \
+  check "outside a git work tree -> silent"                              quiet "$(cd /tmp && jq -nc \
       '{hook_event_name:"UserPromptSubmit",session_id:"x"}' | "$SH" "$G" 2>/dev/null)"
-  check "未知事件 -> 静默"                     quiet "$(fire SubagentStop)"
+  check "an event it does not handle -> silent"                          quiet "$(fire SubagentStop)"
   # scope: follows load-kernel
   new_fixture; fire SessionStart >/dev/null; work a b c d e
-  check "APEX_SCOPE=marker 且无 .apex -> 静默" quiet "$(cd "$FIX" && jq -nc --arg s "$SID" \
+  check "APEX_SCOPE=marker with no .apex -> silent"                      quiet "$(cd "$FIX" && jq -nc --arg s "$SID" \
       '{hook_event_name:"UserPromptSubmit",session_id:$s}' | APEX_SCOPE=marker "$SH" "$G" 2>/dev/null)"
   : > "$FIX/.apex"
-  check "APEX_SCOPE=marker 且有 .apex -> 提醒" nudge "$(cd "$FIX" && jq -nc --arg s "$SID" \
+  check "APEX_SCOPE=marker with a .apex -> speaks"                       nudge "$(cd "$FIX" && jq -nc --arg s "$SID" \
       '{hook_event_name:"UserPromptSubmit",session_id:$s}' | APEX_SCOPE=marker "$SH" "$G" 2>/dev/null)"
 }
 
