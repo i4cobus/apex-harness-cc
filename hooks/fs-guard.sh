@@ -76,6 +76,16 @@ case "$tool" in
     esac
 
     seps=$'&|;(){}`\n'
+
+# Sub-command splitting is shared with env-guard.sh - see split-subcommands.awk for why it
+# has to be quote-aware. If the file is missing (broken install), fall back to the old
+# blunt split: it keeps every detection and only reintroduces the false positive.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+splitter="$here/split-subcommands.awk"
+split_cmd() {
+  if [ -f "$splitter" ]; then printf '%s' "$1" | awk -f "$splitter"
+  else printf '%s' "$1" | tr "$seps" '\n'; fi
+}
     while IFS= read -r seg || [ -n "$seg" ]; do
       read -ra T <<<"$seg"
       [ "${#T[@]}" -eq 0 ] && continue
@@ -158,7 +168,7 @@ case "$tool" in
             $forced && ! $dry && add "."
           fi ;;
       esac
-    done < <(printf '%s' "$cmd" | tr "$seps" '\n')
+    done < <(split_cmd "$cmd")
     ;;
   *) exit 0 ;;
 esac

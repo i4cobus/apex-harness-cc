@@ -31,7 +31,23 @@ Three further concessions to the same concern:
   exist yet claims it, so rewriting a file you just authored never prompts. The guard is
   protecting content that predates your involvement, not your own drafts.
 
-Set `APEX_FS_GUARD=off` to disable it without touching settings.
+Set `APEX_FS_GUARD=off` to disable it without touching settings; `env-guard` has the same
+switch as `APEX_ENV_GUARD=off`. You want these exactly when a guard is wrong about your
+case, which is the moment editing `settings.json` is most annoying.
+
+## Sub-command splitting
+
+Both `PreToolUse(Bash)` hooks judge each sub-command by its leading program, so where the
+fragment boundaries fall decides the verdict. `split-subcommands.awk` places them the way
+a shell would: separators inside quotes are text, but `$(` and backticks still split,
+because a command substitution runs even when it is double-quoted (so `echo "$(pip install evil)"`
+is not a bypass).
+
+The earlier version split on every separator regardless of quoting, reasoning that
+over-splitting could only drop a trigger and never create one. That is false - it promotes
+a quoted word to the front of a fragment, so a commit message that mentioned an install
+inside parentheses was blocked as a dependency install. It fired twice within minutes of
+the hooks first being installed for real use.
 
 ## `load-kernel` scope
 
@@ -97,28 +113,27 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm some-untracked-file"}}' | 
 
 ## Cost per tool call
 
-Measured on macOS (Apple silicon, warm cache, 40 iterations):
+Measured on macOS (Apple silicon, warm), median of 5 rounds x 30 invocations. Round-to-round
+spread was 1-6 ms, so treat smaller differences as noise.
 
 | Hook | Path | Latency |
 |---|---|---|
-| `fs-guard` | command cannot destroy anything (pre-filter exits before any `git` call) | **~15 ms** |
-| `fs-guard` | destructive verb, or `Write` to an existing file → one pathspec-limited `git status` per target | **~36 ms** |
-| `fs-guard` | `Write` to a new path (claims it, exits) | **~29 ms** |
+| `env-guard` | any Bash call | **~17 ms** |
+| `fs-guard` | command cannot destroy anything (pre-filter exits before splitting or calling `git`) | **~19 ms** |
+| `fs-guard` | `Write` to an existing file | **~36 ms** |
+| `fs-guard` | destructive verb -> quote-aware split + one pathspec-limited `git status` per target | **~41 ms** |
 | `fs-guard` | `rm -rf` on a wholly-untracked 2000-file directory | **~77 ms** |
 | `fs-guard` | worst case: a *tracked* directory holding 2000 untracked files (hits `RISK_CAP`) | **~490 ms** |
-| `env-guard` | any Bash call | **~30 ms** |
 
-`git status` itself costs ~30 ms in all of these; the rest is this shell. The default
-untracked mode (not `-uall`) is what keeps the first large-directory case cheap — it
-collapses a wholly-untracked directory to one line instead of two thousand.
-
-`fs-guard`'s pre-filter is what keeps the common case cheaper than `env-guard`: most
-commands contain no `rm`/`mv`/`cp`/`tee`/`clean`/`>` at all and exit before touching git.
+`git status` itself is ~30 ms of the last three; the rest is this shell. Two things keep the
+common cases cheap: `fs-guard`'s pre-filter (most commands contain no destructive verb and
+exit before any work), and the default untracked mode rather than `-uall`, which collapses a
+wholly-untracked directory to one line instead of two thousand.
 
 ## Tests
 
 ```sh
-hooks/test-env-guard.sh          # 36 cases — env-guard
+hooks/test-env-guard.sh          # 42 cases — env-guard
 hooks/test-fs-guard.sh           # 50 cases + ledger + ownership — fs-guard (builds a throwaway git repo)
 hooks/test-completion-gate.sh    # 13 cases — completion-gate (synthetic transcripts)
 ```

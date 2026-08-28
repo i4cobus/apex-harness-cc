@@ -35,3 +35,11 @@ A	VIRTUAL_ENV=.venv pip install requests
 A	ls -la
 A	uv run pytest
 A	python script.py
+# quote-aware splitting: separators inside quotes are text, but a command
+# substitution still runs even when quoted, so it must still split
+A	git commit -m "fix (pip install) parsing"
+A	echo "a && pip install x"
+A	echo 'a && pip install x'
+A	printf "%s" "label (conda install)"
+B	echo "$(pip install evil)"
+B	echo `pip install evil`

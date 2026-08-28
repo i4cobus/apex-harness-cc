@@ -55,10 +55,11 @@ apex-harness-cc/
 ├── hooks/                         # ← guardrails: wire into settings.json
 │   ├── env-guard.sh               # PreToolUse(Bash): hard deny deps into base/system py
 │   ├── fs-guard.sh                # PreToolUse(Bash|Write): ask before destroying untracked files
+│   ├── split-subcommands.awk      # quote-aware sub-command splitting, shared by both guards
 │   ├── load-kernel.sh             # SessionStart: inject the kernel
 │   ├── completion-gate.sh         # Stop: conservative anti-bluff check (opt-in)
 │   ├── settings.snippet.json      # hook wiring to merge into settings.json
-│   ├── test-*.sh / *-cases.tsv    # regression suites (99 cases, bash 3.2 + 5.x)
+│   ├── test-*.sh / *-cases.tsv    # regression suites (105 cases, bash 3.2 + 5.x)
 │   └── README.md                  # what each hook enforces; what is deliberately not mechanized
 └── workflows/
     └── apex-verify.js             # reusable adversarial-verification workflow
@@ -152,14 +153,15 @@ amortizes the per-turn price. If you do not want it in unrelated projects, set
 `APEX_SCOPE=marker` (see `hooks/README.md`) and let it arrive via skill invocation instead.
 
 **Hooks** — zero tokens on the happy path; they emit ~120–200 tokens only when they fire.
-Latency per tool call, measured on macOS (Apple silicon, warm, 40 iterations):
+Latency per tool call, measured on macOS (Apple silicon, warm), median of 5 rounds x 30
+invocations; round-to-round spread was 1-6 ms:
 
 | Hook | Path | Latency |
 |---|---|---|
-| `fs-guard` | nothing destructive in the command (pre-filter, no `git` call) | ~15 ms |
-| `fs-guard` | destructive verb, or `Write` to an existing file → one `git status` per target | ~36 ms |
+| `env-guard` | any Bash call | ~17 ms |
+| `fs-guard` | nothing destructive in the command (pre-filter, no `git` call) | ~19 ms |
+| `fs-guard` | destructive verb, or `Write` to an existing file → one `git status` per target | ~36–41 ms |
 | `fs-guard` | worst case: `rm -rf` a tracked directory holding thousands of untracked files | ~490 ms |
-| `env-guard` | any Bash call | ~30 ms |
 
 **Behavioral (the real driver)** — higher tiers spend more on *verification tool calls*.
 Tier C ≈ negligible; Tier A adversarial verification (`apex-verify`) is the single most
@@ -171,7 +173,7 @@ tokens**. By design, and opt-in — reserve it for claims where a wrong answer i
 ## Status / what's been verified
 
 Validated live on macOS (Claude Code, `jq` + `git` present, bash 3.2.57 and 5.3.15,
-Python 3.11). Regression suites: **99 cases**, every matrix run under both interpreters.
+Python 3.11). Regression suites: **105 cases**, every matrix run under both interpreters.
 
 **Hooks**
 
@@ -179,7 +181,9 @@ Python 3.11). Regression suites: **99 cases**, every matrix run under both inter
   line), so it blocks bare `pip/conda/uv pip` installs **and** chain-bypasses like
   `uv run x && pip install evil`, while allowing the documented safe workflows
   (activate-then-install, `conda run -n proj …`, `uv venv && uv pip install`, `uv add`) and
-  commands that merely mention an install in a quoted string. 36 cases,
+  commands that merely mention an install inside quotes — including when the quoted text
+  contains shell separators, which an earlier version got wrong. A quoted command
+  substitution still splits, so `echo "$(pip install evil)"` is not a bypass. 42 cases,
   `hooks/test-env-guard.sh`.
 - `fs-guard` asks on the untracked-and-not-ignored class only, and stays silent for tracked
   files, ignored files, cache/junk paths, paths outside the repo, `>>` appends, `tee -a`,

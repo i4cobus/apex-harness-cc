@@ -23,6 +23,8 @@
 
 input="$(cat)"
 
+[ "${APEX_ENV_GUARD:-on}" = "off" ] && exit 0
+
 if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
@@ -33,11 +35,22 @@ cmd="$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)"
 # Treat empty / "base" / "root" as the shared environment.
 is_base() { case "$1" in ""|base|root) return 0 ;; *) return 1 ;; esac; }
 
-# Split into sub-commands on  && || | ; &  ( ) { } `  and newlines. Over-splitting is
-# safe here: a fragment whose leading token is not a package manager simply won't match,
-# so it can only ever drop a false trigger, never create one. Under-splitting would be
-# dangerous, so we err toward splitting on everything separator-like.
+# Split into sub-commands on  && || | ; &  ( ) { } `  and newlines - but only where those
+# are real separators, not inside quotes. An earlier version split unconditionally on the
+# theory that over-splitting can only drop a trigger; that was wrong, because it promotes
+# a quoted word to the front of a fragment, so a commit message mentioning an install in
+# parentheses was blocked. See split-subcommands.awk.
 seps=$'&|;(){}`\n'
+
+# Sub-command splitting is shared with fs-guard.sh - see split-subcommands.awk for why it
+# has to be quote-aware. If the file is missing (broken install), fall back to the old
+# blunt split: it keeps every detection and only reintroduces the false positive.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+splitter="$here/split-subcommands.awk"
+split_cmd() {
+  if [ -f "$splitter" ]; then printf '%s' "$1" | awk -f "$splitter"
+  else printf '%s' "$1" | tr "$seps" '\n'; fi
+}
 
 ctx_targeted=false   # a non-shared env has been established earlier in this chain
 block=false
@@ -171,7 +184,7 @@ while IFS= read -r seg || [ -n "$seg" ]; do
     offender="${seg#"${seg%%[![:space:]]*}"}"
     break
   fi
-done < <(printf '%s' "$cmd" | tr "$seps" '\n')
+done < <(split_cmd "$cmd")
 
 $block || exit 0
 
