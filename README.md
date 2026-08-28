@@ -59,7 +59,7 @@ apex-harness-cc/
 │   ├── load-kernel.sh             # SessionStart: inject the kernel
 │   ├── completion-gate.sh         # Stop: conservative anti-bluff check (opt-in)
 │   ├── settings.snippet.json      # hook wiring to merge into settings.json
-│   ├── test-*.sh / *-cases.tsv    # regression suites (105 cases, bash 3.2 + 5.x)
+│   ├── test-*.sh / *-cases.tsv    # regression suites (109 cases, bash 3.2 + 5.x)
 │   └── README.md                  # what each hook enforces; what is deliberately not mechanized
 └── workflows/
     └── apex-verify.js             # reusable adversarial-verification workflow
@@ -173,17 +173,17 @@ tokens**. By design, and opt-in — reserve it for claims where a wrong answer i
 ## Status / what's been verified
 
 Validated live on macOS (Claude Code, `jq` + `git` present, bash 3.2.57 and 5.3.15,
-Python 3.11). Regression suites: **105 cases**, every matrix run under both interpreters.
+Python 3.11). Regression suites: **109 cases**, every matrix run under both interpreters.
 
 **Hooks**
 
 - `env-guard` parses each sub-command's leading program (not substring-scanning the whole
-  line), so it blocks bare `pip/conda/uv pip` installs **and** chain-bypasses like
+  line), so it blocks bare `pip`/`conda` installs **and** chain-bypasses like
   `uv run x && pip install evil`, while allowing the documented safe workflows
-  (activate-then-install, `conda run -n proj …`, `uv venv && uv pip install`, `uv add`) and
+  (activate-then-install, `conda run -n proj …`, `uv pip install`, `uv add`) and
   commands that merely mention an install inside quotes — including when the quoted text
   contains shell separators, which an earlier version got wrong. A quoted command
-  substitution still splits, so `echo "$(pip install evil)"` is not a bypass. 42 cases,
+  substitution still splits, so `echo "$(pip install evil)"` is not a bypass. 46 cases,
   `hooks/test-env-guard.sh`.
 - `fs-guard` asks on the untracked-and-not-ignored class only, and stays silent for tracked
   files, ignored files, cache/junk paths, paths outside the repo, `>>` appends, `tee -a`,

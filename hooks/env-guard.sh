@@ -129,6 +129,7 @@ while IFS= read -r seg || [ -n "$seg" ]; do
 
   # ---- is THIS sub-command a dependency install? ----
   kind=""   # pip | conda | manifest | ""
+  uv_pip=false
   case "$base_prog" in
     pip|pip3)
       case "$a1" in install|uninstall) kind=pip ;; esac ;;
@@ -137,7 +138,7 @@ while IFS= read -r seg || [ -n "$seg" ]; do
         case "$a3" in install|uninstall) kind=pip ;; esac
       fi ;;
     uv)
-      if   [ "$a1" = pip ]; then case "$a2" in install) kind=pip ;; esac
+      if   [ "$a1" = pip ]; then case "$a2" in install) kind=pip; uv_pip=true ;; esac
       elif [ "$a1" = add ]; then kind=manifest
       fi ;;
     conda|mamba)
@@ -156,6 +157,14 @@ while IFS= read -r seg || [ -n "$seg" ]; do
   never_safe=false
   $sudo && never_safe=true
   $prog_is_system_py && never_safe=true
+
+  # `uv pip install` enforces this hook's own invariant: with no virtual environment it
+  # refuses outright ("No virtual environment found; ... or pass --system"), so it cannot
+  # reach a shared interpreter by accident. Verified against uv 0.10.8. The escape hatches
+  # it names are caught below as never_safe, and `sudo` still overrides. This trades an
+  # explicit-target requirement for trust in uv's own guarantee — a deliberate choice,
+  # because blocking it is a false positive on every uv project.
+  $uv_pip && local_safe=true
 
   for ((j=i; j<${#T[@]}; j++)); do
     case "${T[$j]}" in

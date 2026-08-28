@@ -5,7 +5,7 @@ told to follow can be skipped under load; a hook cannot.
 
 | Hook | Event | Kernel rule | What it does | Hard or soft |
 |---|---|---|---|---|
-| `env-guard.sh` | PreToolUse(Bash) | §8 env hygiene | **Denies** `pip/conda/uv/poetry` installs that target base/system/global Python with no explicit non-shared env. | Hard gate (exit 2). |
+| `env-guard.sh` | PreToolUse(Bash) | §8 env hygiene | **Denies** `pip`/`conda` installs that target base/system/global Python with no explicit non-shared env. | Hard gate (exit 2). |
 | `fs-guard.sh` | PreToolUse(Bash, Write) | §8 recoverability | On `rm` / truncating `>` / `mv`·`cp` onto an existing file / `tee` / `git clean -f` / `Write`, **asks the user** when the target holds files git has never seen and does not ignore. | Soft gate (`permissionDecision: "ask"`). |
 | `load-kernel.sh` | SessionStart | §1–§8 (all) | Injects `KERNEL.md` into context every session so the rules are always present, not memory-dependent. Scope selectable (see below). | Always-on context. |
 | `completion-gate.sh` | Stop | §3 do not bluff | If the final turn claims success with hedge words but shows no verification/caveat, blocks **once** and asks for evidence. | Soft, opt-in, non-looping. |
@@ -34,6 +34,20 @@ Three further concessions to the same concern:
 Set `APEX_FS_GUARD=off` to disable it without touching settings; `env-guard` has the same
 switch as `APEX_ENV_GUARD=off`. You want these exactly when a guard is wrong about your
 case, which is the moment editing `settings.json` is most annoying.
+
+## What `env-guard` trusts
+
+`uv pip install` is allowed without an explicit target. uv enforces this hook's own
+invariant itself: with no virtual environment it refuses outright and tells you to pass
+`--system` (verified against uv 0.10.8), so it cannot reach a shared interpreter by
+accident. `--system`, `--break-system-packages` and `sudo` are still blocked, and
+regression cases pin each of them.
+
+This is a deliberate trade, recorded because it is the kind of thing that looks like an
+oversight later: the hook gives up an explicit-target requirement in exchange for trusting
+a third-party tool's guarantee. If uv ever changes that default, this stops holding.
+The alternative was a false positive on every uv project, and guards that are wrong on
+ordinary commands get uninstalled.
 
 ## Sub-command splitting
 
@@ -133,7 +147,7 @@ wholly-untracked directory to one line instead of two thousand.
 ## Tests
 
 ```sh
-hooks/test-env-guard.sh          # 42 cases — env-guard
+hooks/test-env-guard.sh          # 46 cases — env-guard
 hooks/test-fs-guard.sh           # 50 cases + ledger + ownership — fs-guard (builds a throwaway git repo)
 hooks/test-completion-gate.sh    # 13 cases — completion-gate (synthetic transcripts)
 ```

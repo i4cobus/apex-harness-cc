@@ -15,7 +15,7 @@ B	pip uninstall requests
 B	python -m pip install requests
 B	conda install numpy
 B	mamba install numpy
-B	uv pip install requests
+A	uv pip install requests
 B	sudo pip install requests
 B	conda install -n base numpy
 B	conda run -n base pip install evil
@@ -43,3 +43,9 @@ A	echo 'a && pip install x'
 A	printf "%s" "label (conda install)"
 B	echo "$(pip install evil)"
 B	echo `pip install evil`
+# uv refuses to install without a virtual environment, so bare `uv pip install` is safe;
+# the ways round that refusal are not
+B	sudo uv pip install requests
+B	uv pip install --system requests
+B	uv pip install --break-system-packages requests
+A	uv pip install -r requirements.txt
