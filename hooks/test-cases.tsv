@@ -56,8 +56,19 @@ A	uv pip install -r requirements.txt
 # was blocked, because the body was parsed as if it were shell.
 B	bash << 'EOF'\npip install evil\nEOF
 B	sh <<EOF\nconda install evil\nEOF
-X	cat > notes.md << 'EOF'\npip install requests\nEOF
-X	python3 - << 'PY'\ndoc = """\npip install requests\n"""\nPY
-X	cat > f.txt << 'EOF'\n    pip install requests\nEOF
+A	cat > notes.md << 'EOF'\npip install requests\nEOF
+A	python3 - << 'PY'\ndoc = """\npip install requests\n"""\nPY
+A	cat > f.txt << 'EOF'\n    pip install requests\nEOF
 # a real install on its own line is still a command, heredoc or not
 B	echo hi\npip install evil
+# the body is kept whenever a shell owns the heredoc, however the shell is spelled —
+# these pin the direction the fix must not open
+B	sudo bash << 'EOF'\npip install evil\nEOF
+B	/bin/bash << 'EOF'\npip install evil\nEOF
+B	env bash << 'EOF'\npip install evil\nEOF
+B	bash <<-EOF\n\tpip install evil\n\tEOF
+B	bash << 'EOF'\npip install evil
+B	cat << 'EOF' && pip install evil\ndata\nEOF
+# unterminated heredoc to a non-shell: the shell hands the body to that command, it is
+# still not executed
+A	cat << 'EOF'\npip install requests

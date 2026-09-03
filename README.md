@@ -61,7 +61,7 @@ apex-harness-cc/
 │   ├── load-kernel.sh             # SessionStart: inject the kernel
 │   ├── completion-gate.sh         # Stop: conservative anti-bluff check (opt-in)
 │   ├── settings.snippet.json      # hook wiring to merge into settings.json
-│   ├── test-*.sh / *-cases.tsv    # regression suites (109 cases, bash 3.2 + 5.x)
+│   ├── test-*.sh / *-cases.tsv    # regression suites (143 cases, bash 3.2 + 5.x)
 │   └── README.md                  # what each hook enforces; what is deliberately not mechanized
 └── workflows/
     └── apex-verify.js             # reusable adversarial-verification workflow
@@ -177,7 +177,7 @@ tokens**. By design, and opt-in — reserve it for claims where a wrong answer i
 ## Status / what's been verified
 
 Validated live on macOS (Claude Code, `jq` + `git` present, bash 3.2.57 and 5.3.15,
-Python 3.11). Regression suites: **109 cases**, every matrix run under both interpreters.
+Python 3.11). Regression suites: **143 cases**, every matrix run under both interpreters.
 
 **Hooks**
 

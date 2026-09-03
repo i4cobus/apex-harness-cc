@@ -50,28 +50,36 @@ a third-party tool's guarantee. If uv ever changes that default, this stops hold
 The alternative was a false positive on every uv project, and guards that are wrong on
 ordinary commands get uninstalled.
 
-## Known false positive: heredoc bodies are parsed as shell
+## Heredoc bodies are data unless a shell owns them
 
-Marked `X` in `test-cases.tsv` — the runner counts those separately, so this open bug does
-not mask a real regression, and flips to a loud `XPASS` the moment it is fixed.
-
-A heredoc body is only shell to be executed when the heredoc feeds a shell. Fed to anything
-else it is inert data: a file being written, a script in another language. The guard does not
-make that distinction yet, so it blocks
+A heredoc body is shell to be executed only when the heredoc feeds a shell. Fed to anything
+else it is inert data: a file being written, a script in another language. Before this was
+handled, the splitter parsed every body as shell and blocked
 
     cat > notes.md << 'EOF'
     pip install requests
     EOF
 
 which writes a file and installs nothing. Hit live on 2026-09-03 while authoring a document
-whose *content* was install instructions. It only fires when a body line's leading token is
-itself an install command — `text = "pip install x"` is fine, because the leading token is
-`text`.
+whose *content* was install instructions. It only misfired when a body line's leading token
+was itself an install command — `text = "pip install x"` was always fine, because the
+leading token is `text`.
 
-The fix is to skip a heredoc body unless the command it feeds is a shell (`bash`, `sh`,
-`zsh`, …). Not done here because it loosens a guard, and `bash << 'EOF'` genuinely does
-execute its body — regression cases pin that direction so a fix cannot quietly open it.
-The workaround costs nothing: write the file with an editor tool instead of a shell heredoc.
+`split-subcommands.awk` now consumes a heredoc body at the end of the opening line and drops
+it, unless the owning fragment's leading program is a shell, in which case the body is kept
+and split as usual. The owner is resolved past `sudo` / `env` / `command` / `exec` / `nohup`
+wrappers and `VAR=val` prefixes, and by basename, so `/bin/bash` and `sudo bash` both count.
+Quoting the delimiter changes expansion, not who executes it, so it does not enter into this.
+`<<<` is a herestring, not a heredoc, and is untouched.
+
+Loosening a guard needs its opposite direction pinned harder than the fix itself. Regression
+cases cover `bash`, `sudo bash`, `/bin/bash`, `env bash`, the `<<-` tab form, an unterminated
+shell heredoc, and a real install chained after the opener on the same line — all still
+blocked.
+
+Residual gap, accepted: a command outside the shell list that runs its own stdin as shell
+hides its body from the scan. Nothing common does this, and the previous behaviour bought
+coverage of that case at the price of blocking ordinary document authoring.
 
 ## Why `record-nudge` nudges on a growth curve
 
@@ -115,6 +123,10 @@ over-splitting could only drop a trigger and never create one. That is false - i
 a quoted word to the front of a fragment, so a commit message that mentioned an install
 inside parentheses was blocked as a dependency install. It fired twice within minutes of
 the hooks first being installed for real use.
+
+The same file also decides what to do with a heredoc body, on the same principle — see
+[Heredoc bodies are data unless a shell owns them](#heredoc-bodies-are-data-unless-a-shell-owns-them).
+Both are the same lesson: a fragment is only a command if a shell would actually run it.
 
 ## `load-kernel` scope
 
@@ -201,10 +213,10 @@ wholly-untracked directory to one line instead of two thousand.
 ## Tests
 
 ```sh
-hooks/test-env-guard.sh          # 46 cases — env-guard
+hooks/test-env-guard.sh          # 59 cases — env-guard
 hooks/test-fs-guard.sh           # 50 cases + ledger + ownership — fs-guard (builds a throwaway git repo)
 hooks/test-completion-gate.sh    # 13 cases — completion-gate (synthetic transcripts)
-hooks/test-record-nudge.sh       # 19 cases — record-nudge (a session walked through a repo)
+hooks/test-record-nudge.sh       # 21 cases — record-nudge (a session walked through a repo)
 ```
 
 Each runs the matrix under both `/bin/bash` (3.2, macOS system) and a modern bash.
