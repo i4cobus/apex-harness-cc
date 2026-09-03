@@ -50,6 +50,29 @@ a third-party tool's guarantee. If uv ever changes that default, this stops hold
 The alternative was a false positive on every uv project, and guards that are wrong on
 ordinary commands get uninstalled.
 
+## Known false positive: heredoc bodies are parsed as shell
+
+Marked `X` in `test-cases.tsv` — the runner counts those separately, so this open bug does
+not mask a real regression, and flips to a loud `XPASS` the moment it is fixed.
+
+A heredoc body is only shell to be executed when the heredoc feeds a shell. Fed to anything
+else it is inert data: a file being written, a script in another language. The guard does not
+make that distinction yet, so it blocks
+
+    cat > notes.md << 'EOF'
+    pip install requests
+    EOF
+
+which writes a file and installs nothing. Hit live on 2026-09-03 while authoring a document
+whose *content* was install instructions. It only fires when a body line's leading token is
+itself an install command — `text = "pip install x"` is fine, because the leading token is
+`text`.
+
+The fix is to skip a heredoc body unless the command it feeds is a shell (`bash`, `sh`,
+`zsh`, …). Not done here because it loosens a guard, and `bash << 'EOF'` genuinely does
+execute its body — regression cases pin that direction so a fix cannot quietly open it.
+The workaround costs nothing: write the file with an editor tool instead of a shell heredoc.
+
 ## Why `record-nudge` nudges on a growth curve
 
 The pain it addresses is having to remind the agent to write things down. The rule already

@@ -49,3 +49,15 @@ B	sudo uv pip install requests
 B	uv pip install --system requests
 B	uv pip install --break-system-packages requests
 A	uv pip install -r requirements.txt
+# heredocs. `\n` in a case is decoded to a real newline by the runner.
+# A heredoc body is only shell to be executed when the heredoc feeds a shell; fed to
+# anything else it is inert data (a file being written, a script in another language).
+# Observed live 2026-09-03: authoring a doc whose *content* mentioned an install command
+# was blocked, because the body was parsed as if it were shell.
+B	bash << 'EOF'\npip install evil\nEOF
+B	sh <<EOF\nconda install evil\nEOF
+X	cat > notes.md << 'EOF'\npip install requests\nEOF
+X	python3 - << 'PY'\ndoc = """\npip install requests\n"""\nPY
+X	cat > f.txt << 'EOF'\n    pip install requests\nEOF
+# a real install on its own line is still a command, heredoc or not
+B	echo hi\npip install evil
