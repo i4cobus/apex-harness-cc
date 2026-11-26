@@ -38,19 +38,34 @@ ledger="${TMPDIR:-/tmp}/apex-fs-guard-${sid//\//_}.seen"
 # Repo-root-relative form of a path, matching what `git status --porcelain` prints.
 # Both sides are resolved to physical paths: on macOS the same repo is reachable as both
 # /var/... and /private/var/..., and a textual prefix match silently fails on one of them.
+#
+# A path is judged against the repo that OWNS THE PATH, not the one the shell stands in.
+# Standing in an outer repo that ignores a nested clone, the outer repo reports every file
+# in the clone as "ignored" - judged from there, any deletion inside the clone passes.
+CWD_TOP="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -n "$CWD_TOP" ] && CWD_TOP="$(cd "$CWD_TOP" 2>/dev/null && pwd -P)"
+
+# Ledger / prompt key: repo-root-relative inside the repo we stand in (what the prompt has
+# always shown), absolute for a path owned by any other repo so two repos never collide.
+key_for() {  # $1 = owning repo top (physical)   $2 = path relative to it
+  if [ "$1" = "$CWD_TOP" ]; then printf '%s' "$2"; else printf '%s' "$1/$2"; fi
+}
+
 relpath() {
   local top dir abs
-  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-  [ -n "$top" ] || return 1
-  top="$(cd "$top" 2>/dev/null && pwd -P)" || return 1
   dir="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)" || return 1
   abs="$dir/$(basename "$1")"
-  case "$abs" in "$top"/*) printf '%s' "${abs#"$top"/}" ;; *) return 1 ;; esac
+  top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  [ -n "$top" ] || return 1
+  top="$(cd "$top" 2>/dev/null && pwd -P)" || return 1
+  case "$abs" in "$top"/*) key_for "$top" "${abs#"$top"/}" ;; *) return 1 ;; esac
 }
 
 # ---- collect candidate paths that this call could destroy -------------------------------
 CAND=""
 add() { [ -n "${1:-}" ] && [ "${1:-}" != "-" ] && CAND="$CAND$1"$'\n'; return 0; }
+# Arguments of `rm` specifically: removing a directory also removes any repo nested in it.
+RM_ARGS=$'\n'
 
 clean_x=false   # `git clean -x` also removes ignored files, which our probe cannot list
 
@@ -125,7 +140,7 @@ split_cmd() {
               [ "$tok" = "--" ] && { endflags=true; continue; }
               case "$tok" in -?*) continue ;; esac
             fi
-            add "$tok"
+            add "$tok"; RM_ARGS="$RM_ARGS$tok"$'\n'
           done ;;
         mv|cp)
           # Only the DESTINATION can lose data: mv/cp preserve the source content.
@@ -174,12 +189,43 @@ split_cmd() {
 esac
 
 [ -z "$CAND" ] && exit 0
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 # ---- classify: which candidates hold files git has never seen? --------------------------
 # `git status --porcelain -- <path>` prints `?? p` for exactly the unrecoverable class.
 # Tracked paths (recoverable via git) and ignored paths (declared products) do not appear.
-# A path outside the repo makes git error out -> nothing found -> allow.
+# A path that no repo owns makes git error out -> nothing found -> allow.
+#
+# git is run from inside the candidate's own directory, so it picks the owning repo by
+# itself; `--porcelain` prints repo-root-relative paths whatever the cwd.
+untracked_under() {  # $1 = directory to stand in   $2 = pathspec relative to it
+  ( cd "$1" 2>/dev/null || exit 0
+    top="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+    [ -n "$top" ] || exit 0
+    top="$(cd "$top" 2>/dev/null && pwd -P)" || exit 0
+    git -c core.quotepath=false status --porcelain -- "$2" 2>/dev/null \
+      | awk '/^\?\? /{sub(/^\?\? /,""); gsub(/^"|"$/,""); print}' \
+      | while IFS= read -r u; do key_for "$top" "$u"; printf '\n'; done )
+}
+
+# `rm -r dir` also takes out every repo nested under dir. The owning repo cannot see into
+# them (typically the directory is ignored), so each nested repo is asked separately.
+# Depth-bounded because this runs before every recursive rm, including ones over large
+# data directories. Not applied to `git clean`, which leaves nested repos alone.
+NEST_DEPTH=3
+scan() {  # $1 = candidate path as written in the command
+  local p="$1" g
+  if [ -d "$p" ] && [ ! -L "$p" ]; then
+    untracked_under "$p" "."
+    case "$RM_ARGS" in *$'\n'"$p"$'\n'*)
+      while IFS= read -r g; do
+        [ -z "$g" ] && continue
+        untracked_under "${g%/.git}" "."
+      done < <(find "$p" -mindepth 2 -maxdepth "$NEST_DEPTH" -name .git 2>/dev/null) ;;
+    esac
+  else
+    untracked_under "$(dirname "$p")" "$(basename "$p")"
+  fi
+}
 #
 # Deliberately NOT `-uall`: the default collapses a wholly-untracked directory to one
 # `?? dir/` line. Detection is identical (a tracked directory still lists its untracked
@@ -209,8 +255,7 @@ while IFS= read -r p; do
     is_junk "$u" && continue
     case "$AT_RISK" in *$'\n'"$u"$'\n'*) continue ;; esac
     AT_RISK="$AT_RISK$u"$'\n'; n_risk=$((n_risk+1))
-  done < <(git -c core.quotepath=false status --porcelain -- "$p" 2>/dev/null \
-             | awk '/^\?\? /{sub(/^\?\? /,""); gsub(/^"|"$/,""); print}')
+  done < <(scan "$p")
 done < <(printf '%s' "$CAND")
 
 [ "$n_risk" -eq 0 ] && exit 0

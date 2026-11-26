@@ -17,6 +17,13 @@ The class it protects is narrow and provable: a path that is **untracked and not
 has no recovery route at all — no git history, no archive copy, and the session transcript
 expires. Tracked paths are recoverable; ignored paths are declared products.
 
+"Untracked" and "ignored" are answered by **the repo that owns the path**, not by the repo
+the shell happens to stand in. The difference is not cosmetic: an outer repo that ignores
+a directory of nested clones reports every file inside them as ignored, so judged from the
+outer repo any deletion inside a clone passes silently. For the same reason `rm -r` over a
+directory also asks about repos nested inside it (three levels deep; a deeper one is
+missed), and a path inside a repo is still checked when the cwd is in no repo at all.
+
 But deleting such a file is *usually legitimate*, and only the user knows whether this one
 matters. A hard block would be wrong most of the times it fires — and a guard that is wrong
 often gets uninstalled, taking the guards that were right with it. Asking costs one
@@ -161,7 +168,7 @@ rejected, so the next person does not re-litigate it.
 | `fs-guard` on the **Edit tool** | Edit is surgical and requires a prior Read. It would fire on every revision of a brand-new file — the exact nagging pattern that gets guards uninstalled. |
 | `fs-guard` for **`dd` / `truncate` / `shred` / `sed -i`** | Rare in agent work; each needs its own parser. Added only if one is actually observed. |
 | Parsing **shell variables and `cd` chains** in `fs-guard` | `cd /elsewhere && rm "$f"` cannot be resolved without executing the command. Fails open, and it is documented rather than half-guessed. |
-| `fs-guard` **outside a git work tree** | With no version control there is nothing to prove and everything would prompt. Kernel §8 and `references/workflow.md` §8 still apply by judgment there. |
+| `fs-guard` on a path **no git work tree owns** | With no version control there is nothing to prove and everything would prompt. Kernel §8 and `references/workflow.md` §8 still apply by judgment there. |
 
 Honest framing: this is defense in depth, not a sandbox. `env-guard` is a real gate;
 `fs-guard` narrows a whole class of unrecoverable mistakes down to one user decision;

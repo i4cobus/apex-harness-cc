@@ -61,7 +61,7 @@ apex-harness-cc/
 │   ├── load-kernel.sh             # SessionStart: inject the kernel
 │   ├── completion-gate.sh         # Stop: conservative anti-bluff check (opt-in)
 │   ├── settings.snippet.json      # hook wiring to merge into settings.json
-│   ├── test-*.sh / *-cases.tsv    # regression suites (143 cases, bash 3.2 + 5.x)
+│   ├── test-*.sh / *-cases.tsv    # regression suites (158 cases, bash 3.2 + 5.x)
 │   └── README.md                  # what each hook enforces; what is deliberately not mechanized
 └── workflows/
     └── apex-verify.js             # reusable adversarial-verification workflow
@@ -177,7 +177,7 @@ tokens**. By design, and opt-in — reserve it for claims where a wrong answer i
 ## Status / what's been verified
 
 Validated live on macOS (Claude Code, `jq` + `git` present, bash 3.2.57 and 5.3.15,
-Python 3.11). Regression suites: **143 cases**, every matrix run under both interpreters.
+Python 3.11). Regression suites: **158 cases**, every matrix run under both interpreters.
 
 **Hooks**
 
@@ -195,8 +195,11 @@ Python 3.11). Regression suites: **143 cases**, every matrix run under both inte
   (`ls && rm x`), does not fire on commands that merely mention a deletion, and asks about
   a given path at most once per session, and never about a file this session itself created.
   Absolute paths (the shape Claude Code actually sends) are covered, including the macOS
-  `/var` → `/private/var` symlink case that a textual prefix match gets wrong. 50 cases plus
-  ledger and ownership checks, `hooks/test-fs-guard.sh`. The emitted JSON was checked
+  `/var` → `/private/var` symlink case that a textual prefix match gets wrong. Each path
+  is judged by the repo that owns it, not by the repo the shell stands in: a clone nested
+  under a directory the outer repo ignores, and a repo reached from a cwd no repo owns, are
+  both covered, and `rm -r` over a directory also asks about repos nested inside it (depth
+  3). 65 cases plus ledger, ownership and elsewhere checks, `hooks/test-fs-guard.sh`. The emitted JSON was checked
   against the documented `permissionDecision` shape.
 - `completion-gate` reads **only the last assistant message** (verified against a real
   transcript) and matches hedge/evidence terms on word boundaries. 13 cases,

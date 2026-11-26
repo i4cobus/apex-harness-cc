@@ -11,14 +11,15 @@ G="$DIR/fs-guard.sh"
 CASES="$DIR/fs-cases.tsv"
 
 FIX="$(mktemp -d)"
-trap 'rm -rf "$FIX"' EXIT
+OUT="$(mktemp -d)"     # a second repo elsewhere on disk, plus a directory no repo owns
+trap 'rm -rf "$FIX" "$OUT"' EXIT
 build_fixture() {
   cd "$FIX" || exit 1
   git init -q .
   git config user.email apex@example.com
   git config user.name apex
   printf 'tracked\n' > tracked.md
-  printf '*.log\nbuild/\n' > .gitignore
+  printf '*.log\nbuild/\nvendor/\n' > .gitignore
   git add tracked.md .gitignore
   git commit -qm init
   printf 'untracked\n' > untracked.md
@@ -28,6 +29,36 @@ build_fixture() {
   printf 'junk\n'      > .DS_Store
   printf 'ignored\n'   > ignored.log
   printf 'ignored\n'   > build/artifact.bin
+  # A clone kept under a directory the outer repo ignores: the outer repo reports every
+  # file in it as ignored, so only the clone itself can say what is unrecoverable.
+  mkdir -p vendor/inner && cd vendor/inner || exit 1
+  git init -q .
+  git config user.email apex@example.com
+  git config user.name apex
+  printf 'tracked\n' > in-tracked.md
+  printf '*.tmp\n' > .gitignore
+  git add in-tracked.md .gitignore
+  git commit -qm init
+  printf 'untracked\n' > in-untracked.md
+  printf 'ignored\n'   > in-ignored.tmp
+  # A repo that is not under the fixture at all.
+  mkdir -p "$OUT/repo" "$OUT/norepo" && cd "$OUT/repo" || exit 1
+  git init -q .
+  git config user.email apex@example.com
+  git config user.name apex
+  printf 'tracked\n' > o-tracked.md
+  git add o-tracked.md
+  git commit -qm init
+  printf 'untracked\n' > o-untracked.md
+  # An outer repo with nothing untracked of its own, holding one ignored nested clone.
+  mkdir -p "$OUT/clean/vendor/inner" && cd "$OUT/clean" || exit 1
+  git init -q .
+  git config user.email apex@example.com
+  git config user.name apex
+  printf 'vendor/\n' > .gitignore
+  git add .gitignore
+  git commit -qm init
+  cd vendor/inner && git init -q . && printf 'untracked\n' > n-untracked.md
 }
 build_fixture >/dev/null 2>&1
 
@@ -50,6 +81,7 @@ runmatrix() {
     case "$want" in \#*) continue ;; esac
     total=$((total+1))
     cmd="${cmd//%FIX%/$FIX}"
+    cmd="${cmd//%OUT%/$OUT}"
     out="$(cd "$FIX" && payload "$tool" "$cmd" "t$$-$line-$RANDOM" | "$sh" "$G" 2>/dev/null)"
     got=A
     case "$out" in *'"ask"'*) got=K ;; esac
@@ -92,11 +124,29 @@ ownership_check() {  # a file this session created is not pre-existing content
   return 0
 }
 
+elsewhere_check() {  # the shell's own directory must not decide the verdict
+  local sh="$1" a b c d
+  # standing where no repo owns the cwd: a path inside a repo is still that repo's business
+  a="$(cd "$OUT/norepo" && payload Bash "rm $OUT/repo/o-untracked.md" "e1-$$-$RANDOM" | "$sh" "$G" 2>/dev/null)"
+  b="$(cd "$OUT/norepo" && payload Bash "rm $OUT/repo/o-tracked.md"   "e2-$$-$RANDOM" | "$sh" "$G" 2>/dev/null)"
+  # `git clean` leaves nested repos alone, so their untracked files are not at risk from it
+  c="$(cd "$OUT/clean" && payload Bash "git clean -fd" "e3-$$-$RANDOM" | "$sh" "$G" 2>/dev/null)"
+  # ...whereas rm -r of the directory holding the nested clone takes it out
+  d="$(cd "$OUT/clean" && payload Bash "rm -rf vendor" "e4-$$-$RANDOM" | "$sh" "$G" 2>/dev/null)"
+  case "$a" in *'"ask"'*) ;; *) echo "  FAIL elsewhere: cwd outside any repo silenced a path inside one"; return 1 ;; esac
+  case "$b" in *'"ask"'*) echo "  FAIL elsewhere: asked about a tracked file in another repo"; return 1 ;; esac
+  case "$c" in *'"ask"'*) echo "  FAIL elsewhere: git clean was charged with a nested repo it does not touch"; return 1 ;; esac
+  case "$d" in *'"ask"'*) ;; *) echo "  FAIL elsewhere: rm -r over a nested clone passed silently"; return 1 ;; esac
+  echo "  -> elsewhere ok (verdict follows the repo that owns the path, not the cwd)"
+  return 0
+}
+
 f=0
 for sh in /opt/homebrew/bin/bash /bin/bash; do
   [ -x "$sh" ] || continue
   runmatrix "$sh" || f=$((f+$?))
   ledger_check "$sh"    || f=$((f+1))
   ownership_check "$sh" || f=$((f+1))
+  elsewhere_check "$sh" || f=$((f+1))
 done
 exit "$f"

@@ -1,6 +1,9 @@
 # WANT<TAB>TOOL<TAB>PAYLOAD    (K = must ask, A = must allow silently)
 # Fixture (see test-fs-guard.sh): tracked.md + .gitignore committed; untracked.md,
 # sub/untracked2.md, __pycache__/mod.pyc, .DS_Store untracked; *.log and build/ ignored.
+# vendor/ is ignored and holds a nested repo vendor/inner: in-tracked.md committed,
+# in-untracked.md untracked, *.tmp ignored there. %OUT%/repo is a separate repo elsewhere:
+# o-tracked.md committed, o-untracked.md untracked.
 #
 # --- the class the hook exists for -------------------------------------------------------
 K	Bash	rm untracked.md
@@ -64,4 +67,21 @@ K	Write	untracked.md
 A	Write	tracked.md
 A	Write	brand-new.md
 A	Write	ignored.log
-
+# --- nested clone under an ignored directory: the repo that owns the path decides ----------
+K	Bash	rm vendor/inner/in-untracked.md
+K	Bash	echo x > vendor/inner/in-untracked.md
+K	Bash	cp tracked.md vendor/inner/in-untracked.md
+K	Write	vendor/inner/in-untracked.md
+K	Write	%FIX%/vendor/inner/in-untracked.md
+A	Bash	rm vendor/inner/in-tracked.md
+A	Bash	rm vendor/inner/in-ignored.tmp
+A	Write	vendor/inner/in-tracked.md
+A	Bash	echo x > vendor/inner/brand-new.md
+# --- rm -r over a directory takes nested repos with it -------------------------------------
+K	Bash	rm -rf vendor/inner
+K	Bash	rm -rf vendor
+# --- a repo elsewhere on disk, reached by absolute path ------------------------------------
+K	Bash	rm %OUT%/repo/o-untracked.md
+K	Write	%OUT%/repo/o-untracked.md
+A	Bash	rm %OUT%/repo/o-tracked.md
+A	Bash	rm %OUT%/norepo/nothing-here.md
